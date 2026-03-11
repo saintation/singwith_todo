@@ -73,7 +73,7 @@
 
         async function fetchData() {
             const res = await fetch(`https://api.github.com/repos/${REPO}/contents/data.json`, {
-                headers: { 'Authorization': `token ${GITHUB_TOKEN}`, 'Cache-Control': 'no-cache' }
+                headers: { 'Authorization': `token ${GITHUB_TOKEN}`}
             });
             if (!res.ok) throw new Error();
             const data = await res.json();
@@ -164,4 +164,5 @@
 </body>
 
 </html>
+
 
