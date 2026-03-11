@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Singwith - To-do List</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <style>
+        body { font-family: 'Pretendard', sans-serif; background-color: #121212; color: #E0E0E0; }
+        .details-content { max-height: 0; overflow: hidden; opacity: 0; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .details-content.open { max-height: 300px; opacity: 1; margin-top: 0.75rem; }
+        .loading-overlay { backdrop-filter: blur(8px); background: rgba(18, 18, 18, 0.8); }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .syncing { animation: pulse 1.5s infinite; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div id="loginLayer" class="fixed inset-0 z-50 flex items-center justify-center bg-[#121212]">
+        <div class="w-full max-w-sm p-8 text-center">
+            <h1 class="text-3xl font-bold mb-8 tracking-tighter text-[#FF6B6B]">SLATE</h1>
+            <input type="password" id="patInput" placeholder="GitHub Access Token" class="w-full bg-[#1E1E1E] border border-gray-800 rounded-lg p-4 mb-4 outline-none focus:border-[#FF6B6B] transition-all">
+            <input type="text" id="repoInput" placeholder="username/repository" class="w-full bg-[#1E1E1E] border border-gray-800 rounded-lg p-4 mb-6 outline-none focus:border-[#FF6B6B] transition-all">
+            <button onclick="initialize()" class="w-full bg-[#FF6B6B] text-white py-4 rounded-lg font-bold hover:bg-[#e55a5a] transition-all">접속하기</button>
+            <p class="mt-4 text-xs text-gray-600">데이터는 깃허브 저장소에 직접 연결됩니다.</p>
+        </div>
+    </div>
+
+    <div id="loading" class="fixed inset-0 z-40 loading-overlay flex items-center justify-center hidden">
+        <div class="text-[#FF6B6B] font-medium tracking-widest syncing">SYNCING...</div>
+    </div>
+
+    <div id="app" class="hidden w-full max-w-[500px] h-[85vh] bg-[#1E1E1E] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-800">
+        <div class="p-8 flex-1 flex flex-col overflow-hidden">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-xl font-bold tracking-tight">Active Tasks</h2>
+                <button onclick="toggleView()" id="viewBtn" class="text-xs text-gray-500 hover:text-white">Archive ➔</button>
+            </div>
+
+            <div class="mb-8">
+                <input type="text" id="newTodo" onkeypress="if(event.key==='Enter') addTask()" placeholder="Focus on what matters..." class="w-full bg-transparent border-b border-gray-800 pb-2 outline-none focus:border-[#FF6B6B] transition-all mb-4">
+                <input type="date" id="newDate" class="bg-transparent text-xs text-gray-600 outline-none">
+            </div>
+
+            <ul id="todoList" class="flex-1 overflow-y-auto space-y-4 pr-2"></ul>
+        </div>
+    </div>
+
+    <script>
+        let GITHUB_TOKEN = '';
+        let REPO = '';
+        let currentSha = '';
+        let todos = [];
+        let isArchiveView = false;
+
+        async function initialize() {
+            GITHUB_TOKEN = document.getElementById('patInput').value;
+            REPO = document.getElementById('repoInput').value;
+            if(!GITHUB_TOKEN || !REPO) return alert('정보를 모두 입력해주세요.');
+            
+            toggleLoading(true);
+            try {
+                await fetchData();
+                document.getElementById('loginLayer').classList.add('hidden');
+                document.getElementById('app').classList.remove('hidden');
+            } catch (e) {
+                alert('연결 실패: 토큰이나 리포지토리명을 확인하세요.');
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        async function fetchData() {
+            const res = await fetch(`https://api.github.com/repos/${REPO}/contents/data.json`, {
+                headers: { 'Authorization': `token ${GITHUB_TOKEN}`, 'Cache-Control': 'no-cache' }
+            });
+            if (!res.ok) throw new Error();
+            const data = await res.json();
+            currentSha = data.sha;
+            todos = JSON.parse(decodeURIComponent(escape(atob(data.content))));
+            render();
+        }
+
+        async function pushData() {
+            toggleLoading(true);
+            const content = btoa(unescape(encodeURIComponent(JSON.stringify(todos, null, 2))));
+            try {
+                const res = await fetch(`https://api.github.com/repos/${REPO}/contents/data.json`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `token ${GITHUB_TOKEN}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: "Sync Todo", content, sha: currentSha })
+                });
+                if (res.status === 409) {
+                    alert('충돌 발생: 다른 기기의 변경사항이 있습니다. 새로고침합니다.');
+                    return await fetchData();
+                }
+                const resData = await res.json();
+                currentSha = resData.content.sha;
+            } catch (e) {
+                alert('동기화 실패');
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        function render() {
+            const list = document.getElementById('todoList');
+            list.innerHTML = '';
+            const filtered = todos.filter(t => t.completed === isArchiveView);
+            
+            filtered.forEach(todo => {
+                const li = document.createElement('li');
+                li.className = `group bg-[#252525] p-5 rounded-xl border border-transparent hover:border-gray-800 transition-all ${todo.completed ? 'opacity-50' : ''}`;
+                li.innerHTML = `
+                    <div class="flex items-center gap-4 cursor-pointer">
+                        <input type="checkbox" ${todo.completed ? 'checked' : ''} class="w-5 h-5 accent-[#FF6B6B] rounded">
+                        <div class="flex-1 min-w-0" onclick="this.parentElement.nextElementSibling.classList.toggle('open')">
+                            <p class="text-sm font-medium ${todo.completed ? 'line-through' : ''}">${todo.text}</p>
+                            <p class="text-[10px] text-gray-600 mt-1">${todo.date || 'No deadline'}</p>
+                        </div>
+                    </div>
+                    <div class="details-content">
+                        <textarea class="w-full bg-[#1A1A1A] p-4 rounded-lg text-xs mt-2 outline-none border border-transparent focus:border-gray-800 h-24" placeholder="Notes...">${todo.memo || ''}</textarea>
+                    </div>
+                `;
+                
+                const cb = li.querySelector('input');
+                cb.onchange = () => {
+                    todo.completed = cb.checked;
+                    todo.completedAt = cb.checked ? new Date().toISOString() : null;
+                    pushData().then(render);
+                };
+
+                const ta = li.querySelector('textarea');
+                ta.onchange = () => {
+                    todo.memo = ta.value;
+                    pushData();
+                };
+
+                list.appendChild(li);
+            });
+        }
+
+        function addTask() {
+            const input = document.getElementById('newTodo');
+            const date = document.getElementById('newDate');
+            if(!input.value) return;
+            todos.unshift({ id: Date.now(), text: input.value, date: date.value, memo: '', completed: false });
+            input.value = ''; date.value = '';
+            pushData().then(render);
+        }
+
+        function toggleView() {
+            isArchiveView = !isArchiveView;
+            document.getElementById('viewBtn').innerText = isArchiveView ? '➔ Active' : 'Archive ➔';
+            render();
+        }
+
+        function toggleLoading(show) {
+            document.getElementById('loading').classList.toggle('hidden', !show);
+        }
+    </script>
+</body>
+</html>
