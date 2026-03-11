@@ -3,70 +3,65 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Singwith - To-do List</title>
+    <title>Slate - Private Todo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
     <style>
-        :root {
-            color-scheme: dark; /* 브라우저 기본 UI(달력 등)를 다크 모드로 강제 */
-        }
-        body {
-            font-family: 'Pretendard', sans-serif; 
-            background-color: #121212;
-            color: #FFFFFF; /* 기본 글자색을 더 밝게 변경 */
-        }
-        /* 날짜 입력창 스타일 강화 */
-        input[type="date"] {
-            font-size: 1rem; /* 글자 크기 확대 */
-            padding: 12px 8px; /* 터치 영역 확대 */
-            background: #252525;
-            border-radius: 8px;
-            border: 1px solid #333;
-            width: 100%; /* 모바일에서 가득 차게 */
-            cursor: pointer;
-        }
-        /* 메모 영역 대비 조정 */
-        .details-content textarea {
-            color: #F0F0F0; /* 메모 글자색 강화 */
-            background-color: #1A1A1A;
-            line-height: 1.6;
-        }
+        :root { color-scheme: dark; }
+        body { font-family: 'Pretendard', sans-serif; background-color: #0F0F0F; color: #FFFFFF; }
         .details-content { max-height: 0; overflow: hidden; opacity: 0; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .details-content.open { max-height: 300px; opacity: 1; margin-top: 0.75rem; }
-        .loading-overlay { backdrop-filter: blur(8px); background: rgba(18, 18, 18, 0.8); }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .details-content.open { max-height: 400px; opacity: 1; margin-top: 1rem; }
+        
+        /* 날짜 입력 애니메이션 */
+        #dateContainer { max-height: 0; opacity: 0; transition: all 0.3s ease; overflow: hidden; }
+        #dateContainer.show { max-height: 60px; opacity: 1; margin-top: 1rem; }
+        
+        .loading-overlay { backdrop-filter: blur(8px); background: rgba(15, 15, 15, 0.9); }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
         .syncing { animation: pulse 1.5s infinite; }
+        
+        input[type="date"] { font-size: 0.9rem; padding: 10px; background: #252525; border-radius: 8px; border: 1px solid #333; width: 100%; cursor: pointer; }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
 
-    <div id="loginLayer" class="fixed inset-0 z-50 flex items-center justify-center bg-[#121212]">
+    <div id="loginLayer" class="fixed inset-0 z-50 flex items-center justify-center bg-[#0F0F0F]">
         <div class="w-full max-w-sm p-8 text-center">
-            <h1 class="text-3xl font-bold mb-8 tracking-tighter text-[#FF6B6B]">Singwith To-do</h1>
-            <input type="text" id="repoInput" placeholder="username/repository" class="w-full bg-[#1E1E1E] border border-gray-800 rounded-lg p-4 mb-6 outline-none focus:border-[#FF6B6B] transition-all">
-            <input type="password" id="patInput" placeholder="GitHub Access Token" class="w-full bg-[#1E1E1E] border border-gray-800 rounded-lg p-4 mb-4 outline-none focus:border-[#FF6B6B] transition-all">
-            <button onclick="initialize()" class="w-full bg-[#FF6B6B] text-white py-4 rounded-lg font-bold hover:bg-[#e55a5a] transition-all">접속하기</button>
-            <p class="mt-4 text-xs text-gray-600">데이터는 깃허브 저장소에 직접 연결됩니다.</p>
+            <h1 class="text-4xl font-black mb-10 tracking-tighter text-[#FF6B6B]">SLATE</h1>
+            <input type="password" id="patInput" placeholder="GitHub Access Token" class="w-full bg-[#1A1A1A] border border-gray-800 rounded-xl p-4 mb-4 outline-none focus:border-[#FF6B6B] transition-all text-white">
+            <input type="text" id="repoInput" placeholder="username/repository" class="w-full bg-[#1A1A1A] border border-gray-800 rounded-xl p-4 mb-8 outline-none focus:border-[#FF6B6B] transition-all text-white">
+            <button onclick="initialize()" class="w-full bg-[#FF6B6B] text-white py-4 rounded-xl font-bold hover:bg-[#e55a5a] transition-all shadow-lg">연결하기</button>
         </div>
     </div>
 
     <div id="loading" class="fixed inset-0 z-40 loading-overlay flex items-center justify-center hidden">
-        <div class="text-[#FF6B6B] font-medium tracking-widest syncing">SYNCING...</div>
+        <div class="text-[#FF6B6B] font-bold tracking-[0.2em] syncing">SYNCING...</div>
     </div>
 
-    <div id="app" class="hidden w-full max-w-[500px] h-[85vh] bg-[#1E1E1E] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-800">
-        <div class="p-8 flex-1 flex flex-col overflow-hidden">
-            <div class="flex justify-between items-center mb-8">
-                <h2 class="text-xl font-bold tracking-tight">Active Tasks</h2>
-                <button onclick="toggleView()" id="viewBtn" class="text-xs text-gray-500 hover:text-white">Archive ➔</button>
+    <div id="app" class="hidden w-full max-w-[550px] h-[90vh] bg-[#1A1A1A] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-800/50">
+        <div class="p-8 md:p-10 flex-1 flex flex-col overflow-hidden">
+            <div class="flex justify-between items-end mb-10">
+                <h2 id="viewTitle" class="text-3xl font-bold tracking-tight text-white">Active Tasks</h2>
+                <button onclick="toggleView()" id="viewBtn" class="text-sm font-medium text-gray-500 hover:text-[#FF6B6B] transition-colors pb-1 border-b border-transparent hover:border-[#FF6B6B]">Archive ➔</button>
             </div>
 
-            <div class="mb-8">
-                <input type="text" id="newTodo" onkeypress="if(event.key==='Enter') addTask()" placeholder="Focus on what matters..." class="w-full bg-transparent border-b border-gray-800 pb-2 outline-none focus:border-[#FF6B6B] transition-all mb-4">
-                <input type="date" id="newDate" class="bg-transparent text-xs text-gray-600 outline-none">
+            <div id="inputSection" class="mb-10">
+                <div class="flex gap-3 items-center">
+                    <input type="text" id="newTodo" onkeypress="if(event.key==='Enter') addTask()" placeholder="What's next?" class="flex-1 bg-transparent border-b-2 border-gray-800 py-2 outline-none focus:border-[#FF6B6B] transition-all text-lg font-medium">
+                    <button onclick="toggleDateInput()" class="p-2 text-gray-500 hover:text-[#FF6B6B] transition-colors" title="기한 설정">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                    </button>
+                    <button onclick="addTask()" class="bg-[#FF6B6B] text-white px-5 py-2 rounded-xl font-bold hover:bg-[#e55a5a] active:scale-95 transition-all shadow-md">Add</button>
+                </div>
+                <div id="dateContainer" class="flex items-center gap-3">
+                    <span class="text-xs text-gray-500 font-medium">Deadline:</span>
+                    <input type="date" id="newDate" class="flex-1">
+                </div>
             </div>
 
-            <ul id="todoList" class="flex-1 overflow-y-auto space-y-4 pr-2"></ul>
+            <ul id="todoList" class="flex-1 overflow-y-auto space-y-5 pr-2 custom-scrollbar"></ul>
         </div>
     </div>
 
@@ -78,25 +73,21 @@
         let isArchiveView = false;
 
         async function initialize() {
-            GITHUB_TOKEN = document.getElementById('patInput').value;
-            REPO = document.getElementById('repoInput').value;
-            if(!GITHUB_TOKEN || !REPO) return alert('정보를 모두 입력해주세요.');
+            GITHUB_TOKEN = document.getElementById('patInput').value.trim();
+            REPO = document.getElementById('repoInput').value.trim();
+            if(!GITHUB_TOKEN || !REPO) return alert('정보를 입력하세요.');
             
             toggleLoading(true);
             try {
                 await fetchData();
                 document.getElementById('loginLayer').classList.add('hidden');
                 document.getElementById('app').classList.remove('hidden');
-            } catch (e) {
-                alert('연결 실패: 토큰이나 리포지토리명을 확인하세요.');
-            } finally {
-                toggleLoading(false);
-            }
+            } catch (e) { alert('연결 실패'); } finally { toggleLoading(false); }
         }
 
         async function fetchData() {
             const res = await fetch(`https://api.github.com/repos/${REPO}/contents/data.json`, {
-                headers: { 'Authorization': `token ${GITHUB_TOKEN}`}
+                headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
             });
             if (!res.ok) throw new Error();
             const data = await res.json();
@@ -112,19 +103,11 @@
                 const res = await fetch(`https://api.github.com/repos/${REPO}/contents/data.json`, {
                     method: 'PUT',
                     headers: { 'Authorization': `token ${GITHUB_TOKEN}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: "Sync Todo", content, sha: currentSha })
+                    body: JSON.stringify({ message: "Sync", content, sha: currentSha })
                 });
-                if (res.status === 409) {
-                    alert('충돌 발생: 다른 기기의 변경사항이 있습니다. 새로고침합니다.');
-                    return await fetchData();
-                }
                 const resData = await res.json();
                 currentSha = resData.content.sha;
-            } catch (e) {
-                alert('동기화 실패');
-            } finally {
-                toggleLoading(false);
-            }
+            } catch (e) { alert('동기화 실패'); } finally { toggleLoading(false); }
         }
 
         function render() {
@@ -134,33 +117,38 @@
             
             filtered.forEach(todo => {
                 const li = document.createElement('li');
-                li.className = `group bg-[#252525] p-5 rounded-xl border border-transparent hover:border-gray-800 transition-all ${todo.completed ? 'opacity-50' : ''}`;
+                li.className = `group bg-[#222222] p-6 rounded-2xl border border-transparent hover:border-gray-800 transition-all ${todo.completed ? 'opacity-60' : 'shadow-sm'}`;
+                
+                // 날짜 정보가 있을 때만 뱃지 표시
+                const dateHtml = todo.date 
+                    ? `<div class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#FF6B6B] mt-2 bg-[#FF6B6B10] w-fit px-2 py-0.5 rounded">마감: ${todo.date}</div>` 
+                    : '';
+                const archiveDateHtml = todo.completedAt 
+                    ? `<div class="text-[10px] text-gray-600 mt-2">완료일: ${todo.completedAt}</div>` 
+                    : '';
+
                 li.innerHTML = `
-                    <div class="flex items-center gap-4 cursor-pointer">
-                        <input type="checkbox" ${todo.completed ? 'checked' : ''} class="w-5 h-5 accent-[#FF6B6B] rounded">
+                    <div class="flex items-start gap-5 cursor-pointer">
+                        <input type="checkbox" ${todo.completed ? 'checked' : ''} class="mt-1 w-6 h-6 accent-[#FF6B6B] rounded-lg">
                         <div class="flex-1 min-w-0" onclick="this.parentElement.nextElementSibling.classList.toggle('open')">
-                            <p class="text-sm font-medium ${todo.completed ? 'line-through' : ''}">${todo.text}</p>
-                            <p class="text-[10px] text-gray-600 mt-1">${todo.date || 'No deadline'}</p>
+                            <p class="text-[17px] font-bold tracking-tight leading-snug ${todo.completed ? 'line-through text-gray-500' : 'text-white'}">${todo.text}</p>
+                            ${isArchiveView ? archiveDateHtml : dateHtml}
                         </div>
                     </div>
                     <div class="details-content">
-                        <textarea class="w-full bg-[#1A1A1A] p-4 rounded-lg text-xs mt-2 outline-none border border-transparent focus:border-gray-800 h-24" placeholder="Notes...">${todo.memo || ''}</textarea>
+                        <textarea class="w-full bg-[#141414] p-5 rounded-xl text-sm leading-relaxed text-gray-300 mt-2 outline-none border border-gray-800 focus:border-[#FF6B6B] h-28" placeholder="메모...">${todo.memo || ''}</textarea>
                     </div>
                 `;
                 
                 const cb = li.querySelector('input');
                 cb.onchange = () => {
                     todo.completed = cb.checked;
-                    todo.completedAt = cb.checked ? new Date().toISOString() : null;
+                    todo.completedAt = cb.checked ? new Date().toISOString().split('T')[0] : null;
                     pushData().then(render);
                 };
 
                 const ta = li.querySelector('textarea');
-                ta.onchange = () => {
-                    todo.memo = ta.value;
-                    pushData();
-                };
-
+                ta.onchange = () => { todo.memo = ta.value; pushData(); };
                 list.appendChild(li);
             });
         }
@@ -168,25 +156,23 @@
         function addTask() {
             const input = document.getElementById('newTodo');
             const date = document.getElementById('newDate');
-            if(!input.value) return;
-            todos.unshift({ id: Date.now(), text: input.value, date: date.value, memo: '', completed: false });
+            if(!input.value.trim()) return;
+            todos.unshift({ id: Date.now(), text: input.value.trim(), date: date.value, memo: '', completed: false });
             input.value = ''; date.value = '';
+            document.getElementById('dateContainer').classList.remove('show'); // 입력 후 날짜창 닫기
             pushData().then(render);
+        }
+
+        function toggleDateInput() {
+            document.getElementById('dateContainer').classList.toggle('show');
         }
 
         function toggleView() {
             isArchiveView = !isArchiveView;
+            document.getElementById('viewTitle').innerText = isArchiveView ? 'Archives' : 'Active Tasks';
             document.getElementById('viewBtn').innerText = isArchiveView ? '➔ Active' : 'Archive ➔';
+            document.getElementById('inputSection').style.display = isArchiveView ? 'none' : 'block';
             render();
         }
 
-        function toggleLoading(show) {
-            document.getElementById('loading').classList.toggle('hidden', !show);
-        }
-    </script>
-</body>
-
-</html>
-
-
-
+        function toggle
