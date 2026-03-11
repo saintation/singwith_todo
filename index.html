@@ -7,7 +7,30 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
     <style>
-        body { font-family: 'Pretendard', sans-serif; background-color: #121212; color: #E0E0E0; }
+        :root {
+            color-scheme: dark; /* 브라우저 기본 UI(달력 등)를 다크 모드로 강제 */
+        }
+        body {
+            font-family: 'Pretendard', sans-serif; 
+            background-color: #121212;
+            color: #FFFFFF; /* 기본 글자색을 더 밝게 변경 */
+        }
+        /* 날짜 입력창 스타일 강화 */
+        input[type="date"] {
+            font-size: 1rem; /* 글자 크기 확대 */
+            padding: 12px 8px; /* 터치 영역 확대 */
+            background: #252525;
+            border-radius: 8px;
+            border: 1px solid #333;
+            width: 100%; /* 모바일에서 가득 차게 */
+            cursor: pointer;
+        }
+        /* 메모 영역 대비 조정 */
+        .details-content textarea {
+            color: #F0F0F0; /* 메모 글자색 강화 */
+            background-color: #1A1A1A;
+            line-height: 1.6;
+        }
         .details-content { max-height: 0; overflow: hidden; opacity: 0; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .details-content.open { max-height: 300px; opacity: 1; margin-top: 0.75rem; }
         .loading-overlay { backdrop-filter: blur(8px); background: rgba(18, 18, 18, 0.8); }
@@ -164,5 +187,6 @@
 </body>
 
 </html>
+
 
 
