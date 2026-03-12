@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "id": 1773288900339,
+    "text": "완료된 목록 예시",
+    "date": "",
+    "memo": "",
+    "completed": true,
+    "completedAt": "2026-03-12"
+  },
+  {
+    "id": 1773288872112,
+    "text": "Sample  task",
+    "date": "2026-03-12",
+    "memo": "예시로 만드는 할일 목록입니다.",
+    "completed": false
+  }
+]
