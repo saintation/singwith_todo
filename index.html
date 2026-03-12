@@ -25,7 +25,7 @@
         /* 검색창 아이콘 포커스 효과 */
         .search-input-group:focus-within svg { color: #FF6B6B; }
         
-        /* 스크롤바 커스텀 (아카이브 메모 영역 등) */
+        /* 스크롤바 커스텀 */
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
     </style>
@@ -93,12 +93,10 @@
         let isArchiveView = false;
         let searchQuery = '';
 
-        // 하이라이트 함수 (검색어와 일치하는 부분을 붉은 배경의 span 태그로 감쌈)
+        // 하이라이트 처리 함수
         function getHighlightedText(text, query) {
             if (!query || !text) return text || '';
-            // XSS 방지를 위한 기본 이스케이프 (선택적)
             const safeText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            // 대소문자 구분 없이 검색어 매칭
             const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
             return safeText.replace(regex, `<span class="bg-[#FF6B6B] text-white px-1 rounded-sm">$1</span>`);
         }
@@ -211,7 +209,9 @@
                 const li = document.createElement('li');
                 li.className = `group bg-[#222222] p-5 md:p-6 rounded-2xl border border-transparent hover:border-gray-800 transition-all ${todo.completed ? 'opacity-80' : 'shadow-sm'}`;
                 
-                // 검색어가 있을 경우 제목과 메모에 하이라이트 적용
+                // 검색된 메모가 있는지 여부를 판단 (자동 펼침 기능의 핵심 조건)
+                const isMemoMatched = isArchiveView && searchQuery && todo.memo && todo.memo.toLowerCase().includes(searchQuery);
+
                 const displayTitle = (isArchiveView && searchQuery) ? getHighlightedText(todo.text, searchQuery) : todo.text;
                 const displayMemo = (isArchiveView && searchQuery) ? getHighlightedText(todo.memo, searchQuery) : (todo.memo || '');
 
@@ -228,7 +228,6 @@
 
                 const toggleId = `toggle-${todo.id}`;
                 
-                // 아카이브 뷰일 때는 HTML 렌더링을 위해 <textarea> 대신 읽기 전용 <div> 박스를 사용
                 let memoAreaHtml = '';
                 let deleteAndDateSection = '';
 
@@ -253,6 +252,9 @@
                     `;
                 }
 
+                // isMemoMatched가 true이면 '.open' 클래스를 기본으로 추가하여 펼쳐진 상태로 렌더링
+                const detailsOpenClass = isMemoMatched ? 'open' : '';
+
                 li.innerHTML = `
                     <div class="flex items-start gap-4 cursor-pointer" id="${toggleId}">
                         <input type="checkbox" ${todo.completed ? 'checked' : ''} class="mt-1 w-6 h-6 accent-[#FF6B6B] rounded-lg cursor-pointer shrink-0">
@@ -261,7 +263,7 @@
                             ${isArchiveView ? archiveDateHtml : dateHtml}
                         </div>
                     </div>
-                    <div class="details-content cursor-default" onclick="event.stopPropagation()">
+                    <div class="details-content cursor-default ${detailsOpenClass}" onclick="event.stopPropagation()">
                         ${memoAreaHtml}
                         ${deleteAndDateSection}
                     </div>
@@ -322,12 +324,10 @@
             document.getElementById('viewTitle').innerText = isArchiveView ? 'Archives' : 'Active Tasks';
             document.getElementById('viewBtn').innerText = isArchiveView ? '➔ Active' : 'Archive ➔';
             
-            // 뷰 전환 시 표시/숨김 처리
             document.getElementById('inputSection').style.display = isArchiveView ? 'none' : 'block';
             document.getElementById('searchSection').style.display = isArchiveView ? 'block' : 'none';
             document.getElementById('archiveFilterSection').style.display = isArchiveView ? 'block' : 'none';
             
-            // 검색어 및 입력창 상태 초기화
             searchQuery = '';
             document.getElementById('searchInput').value = '';
             
