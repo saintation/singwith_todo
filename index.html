@@ -22,11 +22,12 @@
         .edit-date-input { background: #1A1A1A; border: 1px solid #333; color: #E0E0E0; cursor: pointer; border-radius: 6px; }
         .edit-date-input:focus { border-color: #FF6B6B; }
         
-        textarea[readonly] { cursor: default; }
-        textarea[readonly]:focus { outline: none; }
-
-        /* 검색창 아이콘 색상 전환을 위한 커스텀 설정 */
+        /* 검색창 아이콘 포커스 효과 */
         .search-input-group:focus-within svg { color: #FF6B6B; }
+        
+        /* 스크롤바 커스텀 (아카이브 메모 영역 등) */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
@@ -51,7 +52,7 @@
                 <button onclick="toggleView()" id="viewBtn" class="text-sm font-medium text-gray-500 hover:text-[#FF6B6B] transition-colors pb-1 border-b border-transparent hover:border-[#FF6B6B]">Archive ➔</button>
             </div>
 
-            <div class="mb-8 search-input-group relative">
+            <div id="searchSection" class="mb-4 search-input-group relative hidden">
                 <svg class="w-4 h-4 text-gray-500 absolute left-4 top-1/2 transform -translate-y-1/2 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                 </svg>
@@ -90,7 +91,17 @@
         let currentSha = '';
         let todos = [];
         let isArchiveView = false;
-        let searchQuery = ''; // 검색어 상태 변수
+        let searchQuery = '';
+
+        // 하이라이트 함수 (검색어와 일치하는 부분을 붉은 배경의 span 태그로 감쌈)
+        function getHighlightedText(text, query) {
+            if (!query || !text) return text || '';
+            // XSS 방지를 위한 기본 이스케이프 (선택적)
+            const safeText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            // 대소문자 구분 없이 검색어 매칭
+            const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+            return safeText.replace(regex, `<span class="bg-[#FF6B6B] text-white px-1 rounded-sm">$1</span>`);
+        }
 
         document.getElementById('newTodo').addEventListener('keypress', function (e) {
             if (e.key === 'Enter') {
@@ -99,7 +110,6 @@
             }
         });
 
-        // 검색 이벤트 리스너 추가
         document.getElementById('searchInput').addEventListener('input', function (e) {
             searchQuery = e.target.value.toLowerCase().trim();
             render();
@@ -173,7 +183,6 @@
             
             let filtered = [];
             
-            // 1차 필터: Active vs Archive 및 날짜 필터
             if (isArchiveView) {
                 const startStr = document.getElementById('filterStart').value;
                 const endStr = document.getElementById('filterEnd').value;
@@ -182,8 +191,7 @@
                 filtered = todos.filter(t => !t.completed);
             }
 
-            // 2차 필터: 키워드 검색 적용
-            if (searchQuery) {
+            if (searchQuery && isArchiveView) {
                 filtered = filtered.filter(t => {
                     const titleMatch = t.text.toLowerCase().includes(searchQuery);
                     const memoMatch = t.memo && t.memo.toLowerCase().includes(searchQuery);
@@ -191,10 +199,9 @@
                 });
             }
 
-            // 결과가 없을 때의 UI 처리
             if (filtered.length === 0) {
-                const emptyMessage = searchQuery 
-                    ? `"<span class="text-[#FF6B6B]">${searchQuery}</span>"에 일치하는 항목이 없습니다.` 
+                const emptyMessage = (searchQuery && isArchiveView)
+                    ? `"<span class="text-[#FF6B6B]">${searchQuery}</span>" 검색 결과가 없습니다.` 
                     : "항목이 없습니다.";
                 list.innerHTML = `<li class="text-center py-10 text-gray-500 font-medium">${emptyMessage}</li>`;
                 return;
@@ -204,6 +211,10 @@
                 const li = document.createElement('li');
                 li.className = `group bg-[#222222] p-5 md:p-6 rounded-2xl border border-transparent hover:border-gray-800 transition-all ${todo.completed ? 'opacity-80' : 'shadow-sm'}`;
                 
+                // 검색어가 있을 경우 제목과 메모에 하이라이트 적용
+                const displayTitle = (isArchiveView && searchQuery) ? getHighlightedText(todo.text, searchQuery) : todo.text;
+                const displayMemo = (isArchiveView && searchQuery) ? getHighlightedText(todo.memo, searchQuery) : (todo.memo || '');
+
                 const dateHtml = todo.date 
                     ? `<div class="text-[11px] md:text-xs font-semibold text-[#FF6B6B] mt-2 bg-[#FF6B6B10] w-fit px-2 py-0.5 rounded">목표: ${todo.date}</div>` 
                     : '';
@@ -216,31 +227,43 @@
                 `;
 
                 const toggleId = `toggle-${todo.id}`;
-                const memoReadonly = isArchiveView ? 'readonly' : '';
-                const memoFocusClass = isArchiveView ? 'focus:border-gray-800' : 'focus:border-[#FF6B6B]';
-                const memoPlaceholder = isArchiveView ? '메모 내용이 없습니다.' : '메모 추가...';
-                const dateInputSection = isArchiveView ? 'hidden' : 'flex items-center gap-2';
-                const deleteSectionAlign = isArchiveView ? 'w-full flex justify-end' : '';
+                
+                // 아카이브 뷰일 때는 HTML 렌더링을 위해 <textarea> 대신 읽기 전용 <div> 박스를 사용
+                let memoAreaHtml = '';
+                let deleteAndDateSection = '';
+
+                if (isArchiveView) {
+                    const placeholderText = displayMemo ? displayMemo : '<span class="text-gray-500">메모 내용이 없습니다.</span>';
+                    memoAreaHtml = `<div class="w-full bg-[#141414] p-4 md:p-5 rounded-xl text-sm leading-relaxed text-gray-200 mt-3 border border-gray-800 h-24 overflow-y-auto custom-scrollbar whitespace-pre-wrap cursor-default">${placeholderText}</div>`;
+                    deleteAndDateSection = `
+                        <div class="w-full flex justify-end">
+                            <button class="delete-btn text-[11px] text-red-500 bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded transition-colors font-bold mt-3">삭제</button>
+                        </div>
+                    `;
+                } else {
+                    memoAreaHtml = `<textarea class="w-full bg-[#141414] p-4 md:p-5 rounded-xl text-sm leading-relaxed text-gray-200 mt-3 outline-none border border-gray-800 focus:border-[#FF6B6B] h-24 transition-colors custom-scrollbar" placeholder="메모 추가...">${todo.memo || ''}</textarea>`;
+                    deleteAndDateSection = `
+                        <div class="flex justify-between items-center mt-3 pt-3 border-t border-gray-800">
+                            <div class="flex items-center gap-2">
+                                <span class="text-[11px] text-gray-500 font-medium">목표일:</span>
+                                <input type="date" class="edit-date-input text-[11px] py-1 px-2" value="${todo.date || ''}">
+                            </div>
+                            <button class="delete-btn text-[11px] text-red-500 bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded transition-colors font-bold">삭제</button>
+                        </div>
+                    `;
+                }
 
                 li.innerHTML = `
                     <div class="flex items-start gap-4 cursor-pointer" id="${toggleId}">
                         <input type="checkbox" ${todo.completed ? 'checked' : ''} class="mt-1 w-6 h-6 accent-[#FF6B6B] rounded-lg cursor-pointer shrink-0">
                         <div class="flex-1 min-w-0">
-                            <p class="text-[16px] md:text-[18px] font-bold tracking-tight leading-snug ${todo.completed ? 'line-through text-gray-500' : 'text-white'}">${todo.text}</p>
+                            <p class="text-[16px] md:text-[18px] font-bold tracking-tight leading-snug ${todo.completed ? 'line-through text-gray-500' : 'text-white'}">${displayTitle}</p>
                             ${isArchiveView ? archiveDateHtml : dateHtml}
                         </div>
                     </div>
                     <div class="details-content cursor-default" onclick="event.stopPropagation()">
-                        <textarea class="w-full bg-[#141414] p-4 md:p-5 rounded-xl text-sm leading-relaxed text-gray-200 mt-3 outline-none border border-gray-800 ${memoFocusClass} h-24 transition-colors" placeholder="${memoPlaceholder}" ${memoReadonly}>${todo.memo || ''}</textarea>
-                        <div class="flex justify-between items-center mt-3 pt-3 border-t border-gray-800">
-                            <div class="${dateInputSection}">
-                                <span class="text-[11px] text-gray-500 font-medium">목표일:</span>
-                                <input type="date" class="edit-date-input text-[11px] py-1 px-2" value="${todo.date || ''}">
-                            </div>
-                            <div class="${deleteSectionAlign}">
-                                <button class="delete-btn text-[11px] text-red-500 bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded transition-colors font-bold">삭제</button>
-                            </div>
-                        </div>
+                        ${memoAreaHtml}
+                        ${deleteAndDateSection}
                     </div>
                 `;
                 
@@ -274,7 +297,7 @@
 
                 const deleteBtn = li.querySelector('.delete-btn');
                 deleteBtn.addEventListener('click', () => {
-                    if(confirm(`"${todo.text}" 태스크를 완전히 삭제하시겠습니까?`)) {
+                    if(confirm(`해당 태스크를 완전히 삭제하시겠습니까?`)) {
                         todos = todos.filter(t => t.id !== todo.id);
                         pushData().then(render);
                     }
@@ -291,13 +314,6 @@
             todos.unshift({ id: Date.now(), text: input.value.trim(), date: date.value, memo: '', completed: false });
             input.value = ''; 
             date.value = ''; 
-            
-            // 태스크 추가 시 검색창 초기화로 새 태스크가 바로 보이도록 보장
-            if(searchQuery) {
-                searchQuery = '';
-                document.getElementById('searchInput').value = '';
-            }
-
             pushData().then(render);
         }
 
@@ -305,10 +321,13 @@
             isArchiveView = !isArchiveView;
             document.getElementById('viewTitle').innerText = isArchiveView ? 'Archives' : 'Active Tasks';
             document.getElementById('viewBtn').innerText = isArchiveView ? '➔ Active' : 'Archive ➔';
+            
+            // 뷰 전환 시 표시/숨김 처리
             document.getElementById('inputSection').style.display = isArchiveView ? 'none' : 'block';
+            document.getElementById('searchSection').style.display = isArchiveView ? 'block' : 'none';
             document.getElementById('archiveFilterSection').style.display = isArchiveView ? 'block' : 'none';
             
-            // 화면 전환 시 검색어 초기화
+            // 검색어 및 입력창 상태 초기화
             searchQuery = '';
             document.getElementById('searchInput').value = '';
             
