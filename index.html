@@ -19,9 +19,12 @@
         input[type="date"] { font-family: inherit; background: #252525; border-radius: 8px; border: 1px solid #333; cursor: pointer; color: #E0E0E0; outline: none; transition: border-color 0.2s;}
         input[type="date"]:focus { border-color: #FF6B6B; }
         
-        /* 세부 영역 내 날짜 수정 인풋 스타일 */
         .edit-date-input { background: #1A1A1A; border: 1px solid #333; color: #E0E0E0; cursor: pointer; border-radius: 6px; }
         .edit-date-input:focus { border-color: #FF6B6B; }
+        
+        /* 읽기 전용 텍스트에어리어의 스크롤바 스타일링 */
+        textarea[readonly] { cursor: default; }
+        textarea[readonly]:focus { outline: none; }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
@@ -79,7 +82,6 @@
         let todos = [];
         let isArchiveView = false;
 
-        // 엔터키 이벤트 리스너를 스크립트 내에서 처리 (HTML onclick 충돌 방지)
         document.getElementById('newTodo').addEventListener('keypress', function (e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -90,14 +92,12 @@
         document.getElementById('filterStart').addEventListener('change', render);
         document.getElementById('filterEnd').addEventListener('change', render);
 
-        // 초기 필터 세팅
         const todayDate = new Date();
         const lastWeekDate = new Date();
         lastWeekDate.setDate(todayDate.getDate() - 7);
         document.getElementById('filterEnd').value = todayDate.toISOString().split('T')[0];
         document.getElementById('filterStart').value = lastWeekDate.toISOString().split('T')[0];
 
-        // 초기화 함수 (로그인 버튼에 연결됨)
         async function initialize() {
             REPO = document.getElementById('repoInput').value.trim();
             GITHUB_TOKEN = document.getElementById('patInput').value.trim();
@@ -127,7 +127,6 @@
             if (!res.ok) throw new Error('API request failed');
             const data = await res.json();
             currentSha = data.sha;
-            // 빈 파일([]) 처리 및 한글 디코딩
             const decodedContent = decodeURIComponent(escape(atob(data.content)));
             todos = decodedContent ? JSON.parse(decodedContent) : [];
             render();
@@ -185,8 +184,14 @@
                     </div>
                 `;
 
-                // onclick 이벤트를 HTML에 직접 넣지 않고 스크립트로 처리하기 위해 id 부여
                 const toggleId = `toggle-${todo.id}`;
+                
+                // 아카이브 뷰일 때 속성 분기 처리
+                const memoReadonly = isArchiveView ? 'readonly' : '';
+                const memoFocusClass = isArchiveView ? 'focus:border-gray-800' : 'focus:border-[#FF6B6B]';
+                const memoPlaceholder = isArchiveView ? '메모 내용이 없습니다.' : '메모 추가...';
+                const dateInputSection = isArchiveView ? 'hidden' : 'flex items-center gap-2';
+                const deleteSectionAlign = isArchiveView ? 'w-full flex justify-end' : '';
 
                 li.innerHTML = `
                     <div class="flex items-start gap-4 cursor-pointer" id="${toggleId}">
@@ -197,23 +202,26 @@
                         </div>
                     </div>
                     <div class="details-content cursor-default" onclick="event.stopPropagation()">
-                        <textarea class="w-full bg-[#141414] p-4 md:p-5 rounded-xl text-sm leading-relaxed text-gray-200 mt-3 outline-none border border-gray-800 focus:border-[#FF6B6B] h-24 transition-colors" placeholder="메모 추가...">${todo.memo || ''}</textarea>
+                        <textarea class="w-full bg-[#141414] p-4 md:p-5 rounded-xl text-sm leading-relaxed text-gray-200 mt-3 outline-none border border-gray-800 ${memoFocusClass} h-24 transition-colors" placeholder="${memoPlaceholder}" ${memoReadonly}>${todo.memo || ''}</textarea>
                         <div class="flex justify-between items-center mt-3 pt-3 border-t border-gray-800">
-                            <div class="flex items-center gap-2">
+                            <div class="${dateInputSection}">
                                 <span class="text-[11px] text-gray-500 font-medium">목표일:</span>
                                 <input type="date" class="edit-date-input text-[11px] py-1 px-2" value="${todo.date || ''}">
                             </div>
-                            <button class="delete-btn text-[11px] text-red-500 bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded transition-colors font-bold">삭제</button>
+                            <div class="${deleteSectionAlign}">
+                                <button class="delete-btn text-[11px] text-red-500 bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded transition-colors font-bold">삭제</button>
+                            </div>
                         </div>
                     </div>
                 `;
                 
-                // 이벤트 리스너 바인딩
-                const toggleArea = li.querySelector(`#${toggleId} > div`);
+                // 이벤트 바인딩
+                const toggleArea = li.querySelector(`#${toggleId} > div:nth-child(2)`);
                 toggleArea.addEventListener('click', () => {
                     li.querySelector('.details-content').classList.toggle('open');
                 });
 
+                // 아카이브에서도 체크박스를 풀면 Active로 돌아가는 기능은 유지
                 const cb = li.querySelector('input[type="checkbox"]');
                 cb.addEventListener('change', () => {
                     todo.completed = cb.checked;
@@ -221,17 +229,22 @@
                     pushData().then(render);
                 });
 
-                const ta = li.querySelector('textarea');
-                ta.addEventListener('change', () => { 
-                    todo.memo = ta.value; 
-                    pushData(); 
-                });
+                // Active 상태일 때만 메모/날짜 변경 이벤트 작동
+                if (!isArchiveView) {
+                    const ta = li.querySelector('textarea');
+                    ta.addEventListener('change', () => { 
+                        todo.memo = ta.value; 
+                        pushData(); 
+                    });
 
-                const dateInput = li.querySelector('.edit-date-input');
-                dateInput.addEventListener('change', (e) => {
-                    todo.date = e.target.value; 
-                    pushData().then(render);
-                });
+                    const dateInput = li.querySelector('.edit-date-input');
+                    if (dateInput) {
+                        dateInput.addEventListener('change', (e) => {
+                            todo.date = e.target.value; 
+                            pushData().then(render);
+                        });
+                    }
+                }
 
                 const deleteBtn = li.querySelector('.delete-btn');
                 deleteBtn.addEventListener('click', () => {
