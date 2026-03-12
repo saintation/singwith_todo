@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Slate - Private Todo</title>
+    <title>Singwith To-Do List</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
     <style>
@@ -12,7 +12,6 @@
         .details-content { max-height: 0; overflow: hidden; opacity: 0; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .details-content.open { max-height: 400px; opacity: 1; margin-top: 1rem; }
         
-        /* 날짜 입력 애니메이션 */
         #dateContainer { max-height: 0; opacity: 0; transition: all 0.3s ease; overflow: hidden; }
         #dateContainer.show { max-height: 60px; opacity: 1; margin-top: 1rem; }
         
@@ -27,10 +26,10 @@
 
     <div id="loginLayer" class="fixed inset-0 z-50 flex items-center justify-center bg-[#0F0F0F]">
         <div class="w-full max-w-sm p-8 text-center">
-            <h1 class="text-4xl font-black mb-10 tracking-tighter text-[#FF6B6B]">SLATE</h1>
-            <input type="password" id="patInput" placeholder="GitHub Access Token" class="w-full bg-[#1A1A1A] border border-gray-800 rounded-xl p-4 mb-4 outline-none focus:border-[#FF6B6B] transition-all text-white">
-            <input type="text" id="repoInput" placeholder="username/repository" class="w-full bg-[#1A1A1A] border border-gray-800 rounded-xl p-4 mb-8 outline-none focus:border-[#FF6B6B] transition-all text-white">
-            <button onclick="initialize()" class="w-full bg-[#FF6B6B] text-white py-4 rounded-xl font-bold hover:bg-[#e55a5a] transition-all shadow-lg">연결하기</button>
+            <h1 class="text-3xl font-black mb-10 tracking-tighter text-[#FF6B6B]">Singwith To-Do List</h1>
+            <input type="text" id="repoInput" placeholder="리포지토리 (예: username/repository)" class="w-full bg-[#1A1A1A] border border-gray-800 rounded-xl p-4 mb-4 outline-none focus:border-[#FF6B6B] transition-all text-white">
+            <input type="password" id="patInput" placeholder="GitHub PAT (Access Token)" class="w-full bg-[#1A1A1A] border border-gray-800 rounded-xl p-4 mb-8 outline-none focus:border-[#FF6B6B] transition-all text-white">
+            <button onclick="initialize()" class="w-full bg-[#FF6B6B] text-white py-4 rounded-xl font-bold hover:bg-[#e55a5a] active:scale-95 transition-all shadow-lg">접속하기</button>
         </div>
     </div>
 
@@ -73,16 +72,24 @@
         let isArchiveView = false;
 
         async function initialize() {
-            GITHUB_TOKEN = document.getElementById('patInput').value.trim();
+            // 변경된 UI 순서에 맞춰 값을 가져옵니다.
             REPO = document.getElementById('repoInput').value.trim();
-            if(!GITHUB_TOKEN || !REPO) return alert('정보를 입력하세요.');
+            GITHUB_TOKEN = document.getElementById('patInput').value.trim();
+            
+            if(!GITHUB_TOKEN || !REPO) {
+                return alert('리포지토리와 토큰 정보를 모두 입력하세요.');
+            }
             
             toggleLoading(true);
             try {
                 await fetchData();
                 document.getElementById('loginLayer').classList.add('hidden');
                 document.getElementById('app').classList.remove('hidden');
-            } catch (e) { alert('연결 실패'); } finally { toggleLoading(false); }
+            } catch (e) { 
+                alert('연결 실패: 입력한 리포지토리 이름(username/repo)과 PAT를 다시 확인해 주세요.'); 
+            } finally { 
+                toggleLoading(false); 
+            }
         }
 
         async function fetchData() {
@@ -92,6 +99,8 @@
             if (!res.ok) throw new Error();
             const data = await res.json();
             currentSha = data.sha;
+            
+            // 한글 깨짐 방지를 포함한 Base64 디코딩
             todos = JSON.parse(decodeURIComponent(escape(atob(data.content))));
             render();
         }
@@ -107,7 +116,11 @@
                 });
                 const resData = await res.json();
                 currentSha = resData.content.sha;
-            } catch (e) { alert('동기화 실패'); } finally { toggleLoading(false); }
+            } catch (e) { 
+                alert('동기화에 실패했습니다.'); 
+            } finally { 
+                toggleLoading(false); 
+            }
         }
 
         function render() {
@@ -119,7 +132,6 @@
                 const li = document.createElement('li');
                 li.className = `group bg-[#222222] p-6 rounded-2xl border border-transparent hover:border-gray-800 transition-all ${todo.completed ? 'opacity-60' : 'shadow-sm'}`;
                 
-                // 날짜 정보가 있을 때만 뱃지 표시
                 const dateHtml = todo.date 
                     ? `<div class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#FF6B6B] mt-2 bg-[#FF6B6B10] w-fit px-2 py-0.5 rounded">마감: ${todo.date}</div>` 
                     : '';
@@ -159,7 +171,7 @@
             if(!input.value.trim()) return;
             todos.unshift({ id: Date.now(), text: input.value.trim(), date: date.value, memo: '', completed: false });
             input.value = ''; date.value = '';
-            document.getElementById('dateContainer').classList.remove('show'); // 입력 후 날짜창 닫기
+            document.getElementById('dateContainer').classList.remove('show');
             pushData().then(render);
         }
 
@@ -175,4 +187,7 @@
             render();
         }
 
-        function toggle
+        function toggleLoading(show) { document.getElementById('loading').classList.toggle('hidden', !show); }
+    </script>
+</body>
+</html>
