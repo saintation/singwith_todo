@@ -19,8 +19,8 @@
 이 앱은 별도의 회원가입이 없습니다. 본인의 GitHub 계정과 권한 토큰(PAT)을 마스터 키로 사용합니다.
 
 ### 1. 접속 링크 및 파일 활용
-🔗 **웹앱 바로 실행하기:** `[https://saintation.github.io/singwith_todo/](https://saintation.github.io/singwith_todo/)`
-💡 **직접 호스팅하기:** 제가 배포해 둔 위 링크에 접속해서 바로 사용하셔도 되지만, 이 저장소에 있는 **`[index.html](https://github.com/saintation/singwith_todo/blob/main/index.html)` 파일 단 하나만 복사하거나 다운로드**하여 본인의 GitHub Pages, 로컬 브라우저, 또는 다른 호스팅 환경에 직접 올려서 사용하셔도 무방합니다. (HTML 파일 하나로 모든 기능이 독립적으로 작동합니다.)
+🔗 **웹앱 바로 실행하기:** [https://saintation.github.io/singwith_todo/](https://saintation.github.io/singwith_todo/)
+💡 **직접 호스팅하기:** 제가 배포해 둔 위 링크에 접속해서 바로 사용하셔도 되지만, 이 저장소에 있는 **[index.html](https://github.com/saintation/singwith_todo/blob/main/index.html) 파일 단 하나만 복사하거나 다운로드**하여 본인의 GitHub Pages, 로컬 브라우저, 또는 다른 호스팅 환경에 직접 올려서 사용하셔도 무방합니다. (HTML 파일 하나로 모든 기능이 독립적으로 작동합니다.)
 
 ### 2. 사전 준비 사항 (Data Repository Setup)
 앱에 로그인하기 전, 데이터를 저장할 나만의 '비밀 금고'가 필요합니다.
@@ -58,4 +58,4 @@
 
 ---
 
-*✨ 이 프로젝트는 AI 파트너(Gemini)와 함께 **바이브코딩(Vibe Coding)**을 통해 기획, 디자인, 그리고 개발되었습니다.*
+✨ 이 프로젝트는 AI 파트너(Gemini)와 함께 **바이브코딩(Vibe Coding)**을 통해 기획, 디자인, 그리고 개발되었습니다.
