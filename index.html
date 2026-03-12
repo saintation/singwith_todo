@@ -34,3 +34,239 @@
             <button onclick="initialize()" class="w-full bg-[#FF6B6B] text-white py-4 rounded-xl font-bold hover:bg-[#e55a5a] active:scale-95 transition-all shadow-lg">접속하기</button>
         </div>
     </div>
+
+    <div id="loading" class="fixed inset-0 z-40 loading-overlay flex items-center justify-center hidden">
+        <div class="text-[#FF6B6B] font-bold tracking-[0.2em] syncing">SYNCING...</div>
+    </div>
+
+    <div id="app" class="hidden w-full max-w-[550px] h-[90vh] bg-[#1A1A1A] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-800/50">
+        <div class="p-6 md:p-10 flex-1 flex flex-col overflow-hidden">
+            <div class="flex justify-between items-end mb-8">
+                <h2 id="viewTitle" class="text-3xl font-bold tracking-tight text-white">Active Tasks</h2>
+                <button onclick="toggleView()" id="viewBtn" class="text-sm font-medium text-gray-500 hover:text-[#FF6B6B] transition-colors pb-1 border-b border-transparent hover:border-[#FF6B6B]">Archive ➔</button>
+            </div>
+
+            <div id="inputSection" class="mb-8 space-y-3 block">
+                <div class="flex gap-3 items-center">
+                    <input type="text" id="newTodo" placeholder="What's next?" class="flex-1 bg-transparent border-b-2 border-gray-800 py-2 outline-none focus:border-[#FF6B6B] transition-all text-lg font-medium">
+                    <button onclick="addTask()" class="bg-[#FF6B6B] text-white px-5 py-2.5 rounded-xl font-bold hover:bg-[#e55a5a] active:scale-95 transition-all shadow-md shrink-0">Add</button>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-sm text-gray-400 font-medium whitespace-nowrap">목표일 (선택):</span>
+                    <input type="date" id="newDate" class="flex-1 max-w-[160px] text-sm py-1.5 px-3">
+                </div>
+            </div>
+
+            <div id="archiveFilterSection" class="mb-8 hidden">
+                <div class="flex flex-col gap-3 bg-[#222222] p-4 rounded-xl border border-gray-800">
+                    <label class="text-sm text-[#FF6B6B] font-bold">조회 기간 (완료일 기준)</label>
+                    <div class="flex items-center gap-2">
+                        <input type="date" id="filterStart" class="flex-1 text-sm py-2 px-3">
+                        <span class="text-gray-500 font-bold">~</span>
+                        <input type="date" id="filterEnd" class="flex-1 text-sm py-2 px-3">
+                    </div>
+                </div>
+            </div>
+
+            <ul id="todoList" class="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar"></ul>
+        </div>
+    </div>
+
+    <script>
+        let GITHUB_TOKEN = '';
+        let REPO = '';
+        let currentSha = '';
+        let todos = [];
+        let isArchiveView = false;
+
+        // 엔터키 이벤트 리스너를 스크립트 내에서 처리 (HTML onclick 충돌 방지)
+        document.getElementById('newTodo').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addTask();
+            }
+        });
+
+        document.getElementById('filterStart').addEventListener('change', render);
+        document.getElementById('filterEnd').addEventListener('change', render);
+
+        // 초기 필터 세팅
+        const todayDate = new Date();
+        const lastWeekDate = new Date();
+        lastWeekDate.setDate(todayDate.getDate() - 7);
+        document.getElementById('filterEnd').value = todayDate.toISOString().split('T')[0];
+        document.getElementById('filterStart').value = lastWeekDate.toISOString().split('T')[0];
+
+        // 초기화 함수 (로그인 버튼에 연결됨)
+        async function initialize() {
+            REPO = document.getElementById('repoInput').value.trim();
+            GITHUB_TOKEN = document.getElementById('patInput').value.trim();
+            
+            if(!GITHUB_TOKEN || !REPO) {
+                alert('리포지토리와 토큰을 입력하세요.');
+                return;
+            }
+            
+            toggleLoading(true);
+            try {
+                await fetchData();
+                document.getElementById('loginLayer').classList.add('hidden');
+                document.getElementById('app').classList.remove('hidden');
+            } catch (e) { 
+                console.error(e);
+                alert('연결 실패: 정보(username/repo, PAT)를 확인하세요.'); 
+            } finally { 
+                toggleLoading(false); 
+            }
+        }
+
+        async function fetchData() {
+            const res = await fetch(`https://api.github.com/repos/${REPO}/contents/data.json`, {
+                headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
+            });
+            if (!res.ok) throw new Error('API request failed');
+            const data = await res.json();
+            currentSha = data.sha;
+            // 빈 파일([]) 처리 및 한글 디코딩
+            const decodedContent = decodeURIComponent(escape(atob(data.content)));
+            todos = decodedContent ? JSON.parse(decodedContent) : [];
+            render();
+        }
+
+        async function pushData() {
+            toggleLoading(true);
+            const content = btoa(unescape(encodeURIComponent(JSON.stringify(todos, null, 2))));
+            try {
+                const res = await fetch(`https://api.github.com/repos/${REPO}/contents/data.json`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `token ${GITHUB_TOKEN}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: "Sync Todo", content, sha: currentSha })
+                });
+                const resData = await res.json();
+                currentSha = resData.content.sha;
+            } catch (e) { 
+                console.error(e);
+                alert('동기화 실패'); 
+            } finally { 
+                toggleLoading(false); 
+            }
+        }
+
+        function render() {
+            const list = document.getElementById('todoList');
+            list.innerHTML = '';
+            
+            let filtered = [];
+            if (isArchiveView) {
+                const startStr = document.getElementById('filterStart').value;
+                const endStr = document.getElementById('filterEnd').value;
+                filtered = todos.filter(t => t.completed && t.completedAt >= startStr && t.completedAt <= endStr);
+            } else {
+                filtered = todos.filter(t => !t.completed);
+            }
+
+            if (filtered.length === 0) {
+                list.innerHTML = `<li class="text-center py-10 text-gray-500 font-medium">항목이 없습니다.</li>`;
+                return;
+            }
+            
+            filtered.forEach(todo => {
+                const li = document.createElement('li');
+                li.className = `group bg-[#222222] p-5 md:p-6 rounded-2xl border border-transparent hover:border-gray-800 transition-all ${todo.completed ? 'opacity-80' : 'shadow-sm'}`;
+                
+                const dateHtml = todo.date 
+                    ? `<div class="text-[11px] md:text-xs font-semibold text-[#FF6B6B] mt-2 bg-[#FF6B6B10] w-fit px-2 py-0.5 rounded">목표: ${todo.date}</div>` 
+                    : '';
+                
+                const archiveDateHtml = `
+                    <div class="flex gap-2 mt-2">
+                        <div class="text-[11px] md:text-xs font-semibold text-gray-500 bg-[#1A1A1A] border border-gray-800 w-fit px-2 py-0.5 rounded">🎯 목표: ${todo.date || '없음'}</div>
+                        <div class="text-[11px] md:text-xs font-semibold text-gray-500 bg-[#1A1A1A] border border-gray-800 w-fit px-2 py-0.5 rounded">✅ 완료: ${todo.completedAt}</div>
+                    </div>
+                `;
+
+                // onclick 이벤트를 HTML에 직접 넣지 않고 스크립트로 처리하기 위해 id 부여
+                const toggleId = `toggle-${todo.id}`;
+
+                li.innerHTML = `
+                    <div class="flex items-start gap-4 cursor-pointer" id="${toggleId}">
+                        <input type="checkbox" ${todo.completed ? 'checked' : ''} class="mt-1 w-6 h-6 accent-[#FF6B6B] rounded-lg cursor-pointer shrink-0">
+                        <div class="flex-1 min-w-0">
+                            <p class="text-[16px] md:text-[18px] font-bold tracking-tight leading-snug ${todo.completed ? 'line-through text-gray-500' : 'text-white'}">${todo.text}</p>
+                            ${isArchiveView ? archiveDateHtml : dateHtml}
+                        </div>
+                    </div>
+                    <div class="details-content cursor-default" onclick="event.stopPropagation()">
+                        <textarea class="w-full bg-[#141414] p-4 md:p-5 rounded-xl text-sm leading-relaxed text-gray-200 mt-3 outline-none border border-gray-800 focus:border-[#FF6B6B] h-24 transition-colors" placeholder="메모 추가...">${todo.memo || ''}</textarea>
+                        <div class="flex justify-between items-center mt-3 pt-3 border-t border-gray-800">
+                            <div class="flex items-center gap-2">
+                                <span class="text-[11px] text-gray-500 font-medium">목표일:</span>
+                                <input type="date" class="edit-date-input text-[11px] py-1 px-2" value="${todo.date || ''}">
+                            </div>
+                            <button class="delete-btn text-[11px] text-red-500 bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded transition-colors font-bold">삭제</button>
+                        </div>
+                    </div>
+                `;
+                
+                // 이벤트 리스너 바인딩
+                const toggleArea = li.querySelector(`#${toggleId} > div`);
+                toggleArea.addEventListener('click', () => {
+                    li.querySelector('.details-content').classList.toggle('open');
+                });
+
+                const cb = li.querySelector('input[type="checkbox"]');
+                cb.addEventListener('change', () => {
+                    todo.completed = cb.checked;
+                    todo.completedAt = cb.checked ? new Date().toISOString().split('T')[0] : null;
+                    pushData().then(render);
+                });
+
+                const ta = li.querySelector('textarea');
+                ta.addEventListener('change', () => { 
+                    todo.memo = ta.value; 
+                    pushData(); 
+                });
+
+                const dateInput = li.querySelector('.edit-date-input');
+                dateInput.addEventListener('change', (e) => {
+                    todo.date = e.target.value; 
+                    pushData().then(render);
+                });
+
+                const deleteBtn = li.querySelector('.delete-btn');
+                deleteBtn.addEventListener('click', () => {
+                    if(confirm(`"${todo.text}" 태스크를 완전히 삭제하시겠습니까?`)) {
+                        todos = todos.filter(t => t.id !== todo.id);
+                        pushData().then(render);
+                    }
+                });
+
+                list.appendChild(li);
+            });
+        }
+
+        function addTask() {
+            const input = document.getElementById('newTodo');
+            const date = document.getElementById('newDate');
+            if(!input.value.trim()) return;
+            todos.unshift({ id: Date.now(), text: input.value.trim(), date: date.value, memo: '', completed: false });
+            input.value = ''; 
+            date.value = ''; 
+            pushData().then(render);
+        }
+
+        function toggleView() {
+            isArchiveView = !isArchiveView;
+            document.getElementById('viewTitle').innerText = isArchiveView ? 'Archives' : 'Active Tasks';
+            document.getElementById('viewBtn').innerText = isArchiveView ? '➔ Active' : 'Archive ➔';
+            document.getElementById('inputSection').style.display = isArchiveView ? 'none' : 'block';
+            document.getElementById('archiveFilterSection').style.display = isArchiveView ? 'block' : 'none';
+            render();
+        }
+
+        function toggleLoading(show) { 
+            document.getElementById('loading').classList.toggle('hidden', !show); 
+        }
+    </script>
+</body>
+</html>
