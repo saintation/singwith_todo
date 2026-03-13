@@ -318,9 +318,8 @@
                     ? "bg-[#FF6B6B10] text-[#FF6B6B] border border-[#FF6B6B]/40 focus:border-[#FF6B6B]" 
                     : "bg-[#1A1A1A] text-gray-400 border border-gray-700 focus:border-[#FF6B6B]";
                 
-                // 휴지통 아이콘 버튼으로 교체 및 '목표일 지정' 텍스트 삭제
                 const activeDateAndControlsHtml = `
-                    <div class="flex items-center justify-between w-full">
+                    <div class="flex items-center justify-between w-full mt-1.5">
                         <div class="flex items-center gap-2" onclick="event.stopPropagation()">
                             <input type="date" class="edit-date-input text-[11px] md:text-xs py-1 px-2 rounded cursor-pointer outline-none transition-colors ${dateInputStyle}" value="${todo.date || ''}" ${isTemp ? 'disabled' : ''}>
                         </div>
@@ -338,14 +337,13 @@
                 
                 const detailsOpenClass = isMemoMatched || todo._isOpen ? 'open' : '';
 
+                // 체크박스 크기를 w-5 h-5 로 축소 및 마진 조정
                 li.innerHTML = `
                     <div class="flex items-start gap-4 cursor-pointer toggle-area">
-                        <input type="checkbox" ${todo.completed ? 'checked' : ''} class="mt-1 w-6 h-6 accent-[#FF6B6B] rounded-lg cursor-pointer shrink-0" ${isTemp ? 'disabled' : ''}>
+                        <input type="checkbox" ${todo.completed ? 'checked' : ''} class="mt-0.5 w-5 h-5 accent-[#FF6B6B] rounded-md cursor-pointer shrink-0 transition-transform active:scale-90" ${isTemp ? 'disabled' : ''}>
                         <div class="flex-1 min-w-0">
                             <p class="text-[16px] md:text-[18px] font-bold tracking-tight leading-snug ${titleColorClass}">${displayTitle} ${isTemp ? '<span class="text-xs text-[#FF6B6B] ml-2 animate-pulse">저장 중...</span>' : ''}</p>
-                            <div class="mt-1.5 min-h-[20px] flex items-center w-full">
-                                ${isArchiveView ? archiveBadge : activeDateAndControlsHtml}
-                            </div>
+                            ${isArchiveView ? `<div class="mt-1.5 min-h-[20px] flex items-center w-full" onclick="event.stopPropagation()">${archiveBadge}</div>` : activeDateAndControlsHtml}
                         </div>
                     </div>
                     <div class="details-content cursor-default ${detailsOpenClass}" onclick="event.stopPropagation()">
@@ -354,7 +352,7 @@
                 `;
                 
                 li.querySelector('.toggle-area').addEventListener('click', (e) => {
-                    if (['input', 'textarea', 'button', 'span'].includes(e.target.tagName.toLowerCase())) return;
+                    if (['input', 'textarea', 'button', 'span', 'svg', 'path'].includes(e.target.tagName.toLowerCase())) return;
                     todo._isOpen = !todo._isOpen;
                     render();
                 });
