@@ -11,15 +11,13 @@
         body { font-family: 'Pretendard', sans-serif; background-color: #0F0F0F; color: #FFFFFF; }
         
         .details-content { max-height: 0; overflow: hidden; opacity: 0; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .details-content.open { max-height: 2000px; opacity: 1; margin-top: 0.5rem; } /* 높이 제한 해제 */
+        .details-content.open { max-height: 2000px; opacity: 1; margin-top: 0.5rem; } 
         
         .loading-overlay { backdrop-filter: blur(8px); background: rgba(15, 15, 15, 0.8); }
         .mini-spinner { border: 2px solid #333; border-top-color: #FF6B6B; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         
         input[type="date"], input[type="text"], textarea { font-family: inherit; outline: none; transition: border-color 0.2s, background-color 0.2s; }
-        
-        /* 플렉시블 텍스트에어리어 기본 설정 */
         textarea { resize: none; overflow: hidden; min-height: 52px; }
         
         .search-input-group:focus-within svg { color: #FF6B6B; }
@@ -49,11 +47,14 @@
                 <button onclick="toggleView()" id="viewBtn" class="text-sm font-medium text-gray-500 hover:text-[#FF6B6B] transition-colors pb-1 border-b border-transparent hover:border-[#FF6B6B]">Archive →</button>
             </div>
 
-            <div id="searchSection" class="mb-4 search-input-group relative hidden">
-                <svg class="w-4 h-4 text-gray-500 absolute left-4 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                </svg>
-                <input type="text" id="searchInput" placeholder="검색어 입력 후 Enter..." class="w-full bg-[#222222] border border-gray-800 rounded-xl py-2.5 pl-11 pr-4 focus:border-[#FF6B6B] text-sm text-white placeholder-gray-500 shadow-sm">
+            <div id="searchSection" class="mb-4 search-input-group hidden flex gap-2">
+                <div class="relative flex-1">
+                    <svg class="w-4 h-4 text-gray-500 absolute left-4 top-1/2 transform -translate-y-1/2 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                    <input type="text" id="searchInput" placeholder="검색어 입력 후 Enter..." class="w-full bg-[#222222] border border-gray-800 rounded-xl py-2.5 pl-11 pr-4 focus:border-[#FF6B6B] text-sm text-white placeholder-gray-500 shadow-sm">
+                </div>
+                <button onclick="reloadTasks(true)" class="bg-[#252525] border border-gray-800 text-gray-300 px-4 rounded-xl hover:bg-[#FF6B6B] hover:text-white hover:border-[#FF6B6B] text-sm font-bold shrink-0 transition-all shadow-sm">조회</button>
             </div>
 
             <div id="inputSection" class="mb-6 space-y-3 block">
@@ -97,7 +98,6 @@
         let isFetching = false;
         let hasMore = true;
 
-        // 동기화 지연 방어용 낙관적 로컬 캐시
         const optimisticCache = new Map();
 
         const todayDate = new Date();
@@ -123,12 +123,10 @@
             return safeText.replace(regex, `<span class="bg-[#FF6B6B] text-white px-1 rounded-sm">$1</span>`);
         }
 
-        // 캐시 업데이트 함수
         function updateCache(todo) {
             optimisticCache.set(todo.id, { ...todo, _cachedAt: Date.now() });
         }
 
-        // 텍스트에어리어 자동 리사이징 함수
         function autoResizeTextarea(ta) {
             ta.style.height = 'auto';
             ta.style.height = (ta.scrollHeight) + 'px';
@@ -168,7 +166,6 @@
             if(!isInitial) document.getElementById('bottomLoading').classList.remove('hidden');
 
             try {
-                // 오래된 캐시(30초 경과) 정리
                 const now = Date.now();
                 for (const [id, task] of optimisticCache.entries()) {
                     if (now - task._cachedAt > 30000) optimisticCache.delete(id);
@@ -203,22 +200,20 @@
                         date: targetLabel ? targetLabel.name.replace('target:', '') : '',
                         completed: issue.state === 'closed',
                         completedAt: issue.closed_at ? issue.closed_at.split('T')[0] : null,
-                        _isOpen: !!(issue.body && issue.body.trim()) // 메모가 있으면 항상 오픈
+                        _isOpen: !!(issue.body && issue.body.trim()) 
                     };
 
-                    // API 데이터와 로컬 캐시 병합
                     if (optimisticCache.has(parsedTask.id)) {
                         const cached = optimisticCache.get(parsedTask.id);
                         if (parsedTask.completed === cached.completed && parsedTask.memo === cached.memo && parsedTask.date === cached.date) {
-                            optimisticCache.delete(parsedTask.id); // 깃허브가 최신 상태를 반영했으면 캐시 삭제
+                            optimisticCache.delete(parsedTask.id); 
                         } else {
-                            parsedTask = { ...cached }; // 깃허브가 아직 느리면 로컬 캐시로 강제 덮어쓰기
+                            parsedTask = { ...cached }; 
                         }
                     }
                     return parsedTask;
                 }).filter(Boolean);
 
-                // API에서는 못 가져왔지만, 로컬 캐시에는 있는 데이터 강제 주입 (방금 상태를 변경한 태스크)
                 const fetchedIds = new Set(newTodos.map(t => t.id));
                 for (const [id, cached] of optimisticCache.entries()) {
                     if (!fetchedIds.has(id)) {
@@ -229,7 +224,6 @@
 
                 if (page === 1) todos = newTodos;
                 else {
-                    // 중복 제거 후 합치기
                     const existingIds = new Set(todos.map(t => t.id));
                     newTodos.forEach(nt => { if(!existingIds.has(nt.id)) todos.push(nt); });
                 }
@@ -253,6 +247,7 @@
             return await res.json();
         }
 
+        // 오직 메모 변경에 대해서만 댓글 로그를 남깁니다.
         function postAutoLog(issueId, message) {
             apiRequest(`/${issueId}/comments`, 'POST', { body: message }).catch(e => console.error("Auto-log failed", e));
         }
@@ -302,9 +297,10 @@
                 const displayTitle = (isArchiveView && searchQuery) ? getHighlightedText(todo.text, searchQuery) : todo.text;
                 const displayMemo = (isArchiveView && searchQuery) ? getHighlightedText(todo.memo, searchQuery) : (todo.memo || '');
 
-                const archiveBadge = `<div class="flex gap-2"><div class="text-[11px] md:text-xs font-semibold text-gray-500 bg-[#1A1A1A] border border-gray-800 w-fit px-2 py-0.5 rounded">🎯 목표: ${todo.date || '없음'}</div><div class="text-[11px] md:text-xs font-semibold text-gray-500 bg-[#1A1A1A] border border-gray-800 w-fit px-2 py-0.5 rounded">✅ 완료: ${todo.completedAt || '알수없음'}</div></div>`;
+                // 아카이브 글자색상을 메모 영역(text-gray-200)과 통일
+                const titleColorClass = todo.completed ? 'line-through text-gray-200' : 'text-white';
+                const archiveBadge = `<div class="flex gap-2"><div class="text-[11px] md:text-xs font-semibold text-gray-200 bg-[#1A1A1A] border border-gray-800 w-fit px-2 py-0.5 rounded">🎯 목표: ${todo.date || '없음'}</div><div class="text-[11px] md:text-xs font-semibold text-gray-200 bg-[#1A1A1A] border border-gray-800 w-fit px-2 py-0.5 rounded">✅ 완료: ${todo.completedAt || '알수없음'}</div></div>`;
 
-                // 통합된 목표일 입력 UI
                 const dateInputStyle = todo.date 
                     ? "bg-[#FF6B6B10] text-[#FF6B6B] border border-[#FF6B6B]/40 focus:border-[#FF6B6B]" 
                     : "bg-[#1A1A1A] text-gray-400 border border-gray-700 focus:border-[#FF6B6B]";
@@ -328,7 +324,7 @@
                     <div class="flex items-start gap-4 cursor-pointer toggle-area">
                         <input type="checkbox" ${todo.completed ? 'checked' : ''} class="mt-1 w-6 h-6 accent-[#FF6B6B] rounded-lg cursor-pointer shrink-0" ${isTemp ? 'disabled' : ''}>
                         <div class="flex-1 min-w-0">
-                            <p class="text-[16px] md:text-[18px] font-bold tracking-tight leading-snug ${todo.completed ? 'line-through text-gray-500' : 'text-white'}">${displayTitle} ${isTemp ? '<span class="text-xs text-[#FF6B6B] ml-2 animate-pulse">저장 중...</span>' : ''}</p>
+                            <p class="text-[16px] md:text-[18px] font-bold tracking-tight leading-snug ${titleColorClass}">${displayTitle} ${isTemp ? '<span class="text-xs text-[#FF6B6B] ml-2 animate-pulse">저장 중...</span>' : ''}</p>
                             <div class="mt-1.5 min-h-[20px] flex items-center" onclick="event.stopPropagation()">
                                 ${isArchiveView ? archiveBadge : activeDateHtml}
                             </div>
@@ -340,7 +336,6 @@
                     </div>
                 `;
                 
-                // 이벤트 버블링 차단 (인풋, 체크박스 클릭 시 토글 방지)
                 li.querySelector('.toggle-area').addEventListener('click', (e) => {
                     if (['input', 'textarea', 'button', 'span'].includes(e.target.tagName.toLowerCase())) return;
                     todo._isOpen = !todo._isOpen;
@@ -359,7 +354,7 @@
                     
                     try { 
                         await apiRequest(`/${todo.id}`, 'PATCH', { state: cb.checked ? 'closed' : 'open' }); 
-                        postAutoLog(todo.id, `✅ **상태 변경:** ${cb.checked ? '완료됨 (Archive)' : '진행 중 (Active)'}`);
+                        // 상태 변경 자동 로그 제거 완료
                     } 
                     catch(e) { 
                         optimisticCache.delete(todo.id);
@@ -371,7 +366,6 @@
 
                 if (!isArchiveView && !isTemp) {
                     const ta = li.querySelector('textarea');
-                    // 플렉시블 텍스트에어리어 이벤트
                     ta.addEventListener('input', function() { autoResizeTextarea(this); });
                     ta.addEventListener('change', async () => { 
                         const oldMemo = todo.memo;
@@ -379,23 +373,23 @@
                         updateCache(todo);
                         try { 
                             await apiRequest(`/${todo.id}`, 'PATCH', { body: ta.value }); 
+                            // 오직 메모 변경만 자동 로그로 전송합니다.
                             const logContent = ta.value ? `\n> ${ta.value.replace(/\n/g, '\n> ')}` : ' (내용 없음)';
                             postAutoLog(todo.id, `📝 **메모 업데이트:**${logContent}`);
                         } 
                         catch(e) { optimisticCache.delete(todo.id); todo.memo = oldMemo; render(); }
                     });
 
-                    // 명시적 날짜 변경 이벤트
                     const dateInput = li.querySelector('.edit-date-input');
                     dateInput.addEventListener('change', async (e) => {
                         const oldDate = todo.date;
-                        todo.date = e.target.value; // 지우면 "" 빈 문자열 됨
+                        todo.date = e.target.value; 
                         updateCache(todo);
                         render();
                         try {
                             const labels = todo.date ? [`target:${todo.date}`] : [];
                             await apiRequest(`/${todo.id}`, 'PATCH', { labels });
-                            postAutoLog(todo.id, todo.date ? `📅 **목표일 설정:** ${todo.date}` : `📅 **목표일 삭제됨**`);
+                            // 날짜 변경 자동 로그 제거 완료
                         } catch(err) { optimisticCache.delete(todo.id); todo.date = oldDate; render(); }
                     });
                 }
@@ -405,11 +399,11 @@
                     if(confirm(`해당 태스크를 완전히 삭제하시겠습니까?`)) {
                         const backup = {...todo};
                         todos = todos.filter(t => t.id !== todo.id);
-                        optimisticCache.delete(todo.id); // 캐시에서도 파기
+                        optimisticCache.delete(todo.id); 
                         render();
                         try { 
                             await apiRequest(`/${todo.id}`, 'PATCH', { state: 'closed', labels: ['deleted'] }); 
-                            postAutoLog(todo.id, `🗑️ **태스크 영구 삭제**`);
+                            // 삭제 자동 로그 제거 완료
                         } 
                         catch(e) { todos.push(backup); render(); }
                     }
@@ -418,7 +412,6 @@
                 list.appendChild(li);
             });
 
-            // 렌더링 완료 후 모든 텍스트에어리어 높이 초기화 (플렉시블 적용)
             setTimeout(() => {
                 list.querySelectorAll('textarea.auto-resize').forEach(ta => autoResizeTextarea(ta));
             }, 0);
@@ -447,9 +440,9 @@
                 const idx = todos.findIndex(t => t.id === tempId);
                 if(idx > -1) {
                     todos[idx].id = res.number;
-                    updateCache(todos[idx]); // 진짜 ID 발급 후 캐시에 등록
+                    updateCache(todos[idx]); 
                     render();
-                    postAutoLog(res.number, `✨ **태스크 생성**\n${dateVal ? `목표일: ${dateVal}` : ''}`);
+                    // 생성 자동 로그 제거 완료
                 }
             } catch(e) { 
                 todos = todos.filter(t => t.id !== tempId);
@@ -464,8 +457,9 @@
             document.getElementById('viewTitle').innerText = isArchiveView ? 'Archives' : 'Active Tasks';
             document.getElementById('viewBtn').innerText = isArchiveView ? '← Active' : 'Archive →';
             
+            // Flex box 제어를 위해 display: flex 속성 부여
             document.getElementById('inputSection').style.display = isArchiveView ? 'none' : 'block';
-            document.getElementById('searchSection').style.display = isArchiveView ? 'block' : 'none';
+            document.getElementById('searchSection').style.display = isArchiveView ? 'flex' : 'none';
             document.getElementById('archiveFilterSection').style.display = isArchiveView ? 'block' : 'none';
             
             document.getElementById('searchInput').value = '';
