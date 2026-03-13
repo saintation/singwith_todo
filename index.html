@@ -67,8 +67,13 @@
                     <input type="text" id="newTodo" placeholder="What's next?" class="flex-1 min-w-0 bg-transparent border-b-2 border-gray-800 py-2 focus:border-[#FF6B6B] text-lg font-medium text-white">
                     <button onclick="addTask()" class="bg-[#FF6B6B] text-white px-5 py-2.5 rounded-xl font-bold hover:bg-[#e55a5a] active:scale-95 transition-all shadow-md shrink-0">Add</button>
                 </div>
-                <div class="flex items-center gap-3 w-full">
-                    <span class="text-sm text-gray-400 font-medium whitespace-nowrap shrink-0">목표일 (선택):</span>
+                <div class="flex items-center gap-3 w-full mt-1">
+                    <span class="text-sm text-gray-400 font-bold whitespace-nowrap shrink-0 flex items-center gap-1.5">
+                        <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                        Target
+                    </span>
                     <input type="date" id="newDate" class="flex-1 min-w-0 max-w-[160px] text-sm py-1.5 px-3 bg-[#252525] rounded-lg border border-gray-800">
                 </div>
             </div>
@@ -313,13 +318,17 @@
                     ? "bg-[#FF6B6B10] text-[#FF6B6B] border border-[#FF6B6B]/40 focus:border-[#FF6B6B]" 
                     : "bg-[#1A1A1A] text-gray-400 border border-gray-700 focus:border-[#FF6B6B]";
                 
+                // 휴지통 아이콘 버튼으로 교체 및 '목표일 지정' 텍스트 삭제
                 const activeDateAndControlsHtml = `
                     <div class="flex items-center justify-between w-full">
                         <div class="flex items-center gap-2" onclick="event.stopPropagation()">
                             <input type="date" class="edit-date-input text-[11px] md:text-xs py-1 px-2 rounded cursor-pointer outline-none transition-colors ${dateInputStyle}" value="${todo.date || ''}" ${isTemp ? 'disabled' : ''}>
-                            ${!todo.date ? '<span class="text-[11px] text-gray-500 font-medium cursor-pointer" onclick="this.previousElementSibling.showPicker()">목표일 지정</span>' : ''}
                         </div>
-                        <button class="delete-btn text-[11px] text-red-500 bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded transition-colors font-bold shrink-0" ${isTemp ? 'disabled' : ''}>삭제</button>
+                        <button class="delete-btn bg-[#1A1A1A] border border-gray-800 text-gray-500 w-[30px] h-[30px] rounded-lg hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 flex items-center justify-center shrink-0 transition-all" ${isTemp ? 'disabled' : ''} title="삭제">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                        </button>
                     </div>
                 `;
 
