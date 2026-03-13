@@ -113,8 +113,6 @@
         let isFetching = false;
         let hasMore = true;
 
-        const optimisticCache = new Map();
-
         const todayDate = new Date();
         const lastWeekDate = new Date();
         lastWeekDate.setDate(todayDate.getDate() - 7);
@@ -131,15 +129,27 @@
             }
         });
 
-        function getHighlightedText(text, query) {
-            if (!query || !text) return text || '';
-            const safeText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        // XSS 방지를 위한 안전한 하이라이트 노드 생성 함수
+        function createHighlightedNode(text, query) {
+            const fragment = document.createDocumentFragment();
+            if (!text) return fragment;
+            if (!query) {
+                fragment.appendChild(document.createTextNode(text));
+                return fragment;
+            }
             const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-            return safeText.replace(regex, `<span class="bg-[#FF6B6B] text-white px-1 rounded-sm">$1</span>`);
-        }
-
-        function updateCache(todo) {
-            optimisticCache.set(todo.id, { ...todo, _cachedAt: Date.now() });
+            const parts = text.split(regex);
+            parts.forEach(part => {
+                if (part.toLowerCase() === query.toLowerCase()) {
+                    const span = document.createElement('span');
+                    span.className = "bg-[#FF6B6B] text-white px-1 rounded-sm";
+                    span.textContent = part;
+                    fragment.appendChild(span);
+                } else if (part) {
+                    fragment.appendChild(document.createTextNode(part));
+                }
+            });
+            return fragment;
         }
 
         function autoResizeTextarea(ta) {
@@ -181,11 +191,6 @@
             if(!isInitial) document.getElementById('bottomLoading').classList.remove('hidden');
 
             try {
-                const now = Date.now();
-                for (const [id, task] of optimisticCache.entries()) {
-                    if (now - task._cachedAt > 30000) optimisticCache.delete(id);
-                }
-
                 let url;
                 if (isArchiveView) {
                     const start = document.getElementById('filterStart').value;
@@ -207,8 +212,7 @@
 
                 const newTodos = items.filter(i => !i.pull_request && !i.labels.some(l => l.name === 'deleted')).map(issue => {
                     const targetLabel = issue.labels.find(l => l.name.startsWith('target:'));
-                    
-                    let parsedTask = {
+                    return {
                         id: issue.number,
                         text: issue.title,
                         memo: issue.body || '',
@@ -217,25 +221,7 @@
                         completedAt: issue.closed_at ? issue.closed_at.split('T')[0] : null,
                         _isOpen: !!(issue.body && issue.body.trim()) 
                     };
-
-                    if (optimisticCache.has(parsedTask.id)) {
-                        const cached = optimisticCache.get(parsedTask.id);
-                        if (parsedTask.completed === cached.completed && parsedTask.memo === cached.memo && parsedTask.date === cached.date) {
-                            optimisticCache.delete(parsedTask.id); 
-                        } else {
-                            parsedTask = { ...cached }; 
-                        }
-                    }
-                    return parsedTask;
-                }).filter(Boolean);
-
-                const fetchedIds = new Set(newTodos.map(t => t.id));
-                for (const [id, cached] of optimisticCache.entries()) {
-                    if (!fetchedIds.has(id)) {
-                        if (isArchiveView && cached.completed) newTodos.push(cached);
-                        else if (!isArchiveView && !cached.completed) newTodos.push(cached);
-                    }
-                }
+                });
 
                 if (page === 1) todos = newTodos;
                 else {
@@ -297,84 +283,141 @@
             }
 
             if (displayTodos.length === 0) {
-                const emptyMessage = (searchQuery && isArchiveView) ? `"<span class="text-[#FF6B6B]">${searchQuery}</span>" 검색 결과가 없습니다.` : "항목이 없습니다.";
-                list.innerHTML = `<li class="text-center py-10 text-gray-500 font-medium">${emptyMessage}</li>`;
+                const li = document.createElement('li');
+                li.className = "text-center py-10 font-medium text-gray-500";
+                if (searchQuery && isArchiveView) {
+                    li.innerHTML = `"<span class="text-[#FF6B6B]"></span>" 검색 결과가 없습니다.`;
+                    li.querySelector('span').textContent = searchQuery;
+                } else {
+                    li.textContent = "항목이 없습니다.";
+                }
+                list.appendChild(li);
                 return;
             }
             
             displayTodos.forEach(todo => {
                 const li = document.createElement('li');
+                li.id = `todo-${todo.id}`;
                 li.className = `group bg-[#222222] p-5 md:p-6 rounded-2xl border border-transparent hover:border-gray-800 transition-all ${todo.completed ? 'opacity-80' : 'shadow-sm'}`;
                 
                 const isTemp = String(todo.id).startsWith('temp-');
                 const isMemoMatched = isArchiveView && searchQuery && todo.memo && todo.memo.toLowerCase().includes(searchQuery);
-                const displayTitle = (isArchiveView && searchQuery) ? getHighlightedText(todo.text, searchQuery) : todo.text;
-                const displayMemo = (isArchiveView && searchQuery) ? getHighlightedText(todo.memo, searchQuery) : (todo.memo || '');
-
-                const titleColorClass = todo.completed ? 'line-through text-gray-200' : 'text-white';
-                const archiveBadge = `<div class="flex gap-2"><div class="text-[11px] md:text-xs font-semibold text-gray-200 bg-[#1A1A1A] border border-gray-800 w-fit px-2 py-0.5 rounded">🎯 목표: ${todo.date || '없음'}</div><div class="text-[11px] md:text-xs font-semibold text-gray-200 bg-[#1A1A1A] border border-gray-800 w-fit px-2 py-0.5 rounded">✅ 완료: ${todo.completedAt || '알수없음'}</div></div>`;
-
-                const dateInputStyle = todo.date 
-                    ? "bg-[#FF6B6B10] text-[#FF6B6B] border border-[#FF6B6B]/40 focus:border-[#FF6B6B]" 
-                    : "bg-[#1A1A1A] text-gray-400 border border-gray-700 focus:border-[#FF6B6B]";
-                
-                const activeDateAndControlsHtml = `
-                    <div class="flex items-center justify-between w-full mt-1.5">
-                        <div class="flex items-center gap-2" onclick="event.stopPropagation()">
-                            <input type="date" class="edit-date-input text-[11px] md:text-xs py-1 px-2 rounded cursor-pointer outline-none transition-colors ${dateInputStyle}" value="${todo.date || ''}" ${isTemp ? 'disabled' : ''}>
-                        </div>
-                        <button class="delete-btn bg-[#1A1A1A] border border-gray-800 text-gray-500 w-[30px] h-[30px] rounded-lg hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 flex items-center justify-center shrink-0 transition-all" ${isTemp ? 'disabled' : ''} title="삭제">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                            </svg>
-                        </button>
-                    </div>
-                `;
-
-                const memoAreaHtml = isArchiveView 
-                    ? `<div class="w-full bg-[#141414] p-4 rounded-xl text-sm text-gray-200 border border-gray-800 min-h-[52px] whitespace-pre-wrap cursor-default mt-2">${displayMemo || '<span class="text-gray-500">메모 없음</span>'}</div>`
-                    : `<textarea class="w-full bg-[#141414] p-4 rounded-xl text-sm text-gray-200 border border-gray-800 focus:border-[#FF6B6B] mt-2 custom-scrollbar auto-resize" rows="1" placeholder="메모 추가..." ${isTemp ? 'disabled' : ''}>${todo.memo}</textarea>`;
-                
                 const detailsOpenClass = isMemoMatched || todo._isOpen ? 'open' : '';
 
-                // 체크박스 크기를 w-5 h-5 로 축소 및 마진 조정
+                // 안전한 기본 골격 생성 (innerHTML 사용 최소화 및 제한적 렌더링)
                 li.innerHTML = `
                     <div class="flex items-start gap-4 cursor-pointer toggle-area">
-                        <input type="checkbox" ${todo.completed ? 'checked' : ''} class="mt-0.5 w-5 h-5 accent-[#FF6B6B] rounded-md cursor-pointer shrink-0 transition-transform active:scale-90" ${isTemp ? 'disabled' : ''}>
+                        <input type="checkbox" class="mt-1 w-6 h-6 accent-[#FF6B6B] rounded-lg cursor-pointer shrink-0">
                         <div class="flex-1 min-w-0">
-                            <p class="text-[16px] md:text-[18px] font-bold tracking-tight leading-snug ${titleColorClass}">${displayTitle} ${isTemp ? '<span class="text-xs text-[#FF6B6B] ml-2 animate-pulse">저장 중...</span>' : ''}</p>
-                            ${isArchiveView ? `<div class="mt-1.5 min-h-[20px] flex items-center w-full" onclick="event.stopPropagation()">${archiveBadge}</div>` : activeDateAndControlsHtml}
+                            <p class="todo-title text-[16px] md:text-[18px] font-bold tracking-tight leading-snug flex items-center"></p>
+                            <div class="todo-controls mt-1.5 min-h-[20px] flex items-center w-full"></div>
                         </div>
                     </div>
                     <div class="details-content cursor-default ${detailsOpenClass}" onclick="event.stopPropagation()">
-                        ${memoAreaHtml}
+                        <div class="memo-container w-full bg-[#141414] rounded-xl text-sm text-gray-200 mt-2 flex flex-col"></div>
                     </div>
                 `;
                 
-                li.querySelector('.toggle-area').addEventListener('click', (e) => {
-                    if (['input', 'textarea', 'button', 'span', 'svg', 'path'].includes(e.target.tagName.toLowerCase())) return;
-                    todo._isOpen = !todo._isOpen;
-                    render();
-                });
+                // 데이터 삽입 (textContent 및 안전한 노드 활용)
+                const titleP = li.querySelector('.todo-title');
+                titleP.className += todo.completed ? ' line-through text-gray-200' : ' text-white';
+                if (isArchiveView && searchQuery) titleP.appendChild(createHighlightedNode(todo.text, searchQuery));
+                else titleP.textContent = todo.text;
+
+                if (isTemp) {
+                    const tempBadge = document.createElement('span');
+                    tempBadge.className = "temp-badge text-xs text-[#FF6B6B] ml-2 animate-pulse shrink-0";
+                    tempBadge.textContent = "저장 중...";
+                    titleP.appendChild(tempBadge);
+                }
 
                 const cb = li.querySelector('input[type="checkbox"]');
+                cb.checked = todo.completed;
+                if (isTemp) cb.disabled = true;
+
+                const controlsDiv = li.querySelector('.todo-controls');
+                if (isArchiveView) {
+                    controlsDiv.innerHTML = `
+                        <div class="flex gap-2">
+                            <div class="target-badge text-[11px] md:text-xs font-semibold text-gray-200 bg-[#1A1A1A] border border-gray-800 w-fit px-2 py-0.5 rounded"></div>
+                            <div class="comp-badge text-[11px] md:text-xs font-semibold text-gray-200 bg-[#1A1A1A] border border-gray-800 w-fit px-2 py-0.5 rounded"></div>
+                        </div>`;
+                    controlsDiv.querySelector('.target-badge').textContent = `🎯 목표: ${todo.date || '없음'}`;
+                    controlsDiv.querySelector('.comp-badge').textContent = `✅ 완료: ${todo.completedAt || '알수없음'}`;
+                } else {
+                    controlsDiv.innerHTML = `
+                        <div class="flex items-center justify-between w-full">
+                            <div class="flex items-center gap-2" onclick="event.stopPropagation()">
+                                <input type="date" class="edit-date-input text-[11px] md:text-xs py-1 px-2 rounded cursor-pointer outline-none transition-colors">
+                            </div>
+                            <button class="delete-btn bg-[#1A1A1A] border border-gray-800 text-gray-500 w-[30px] h-[30px] rounded-lg hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 flex items-center justify-center shrink-0 transition-all" title="삭제">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </button>
+                        </div>`;
+                    const dateInput = controlsDiv.querySelector('.edit-date-input');
+                    dateInput.value = todo.date || '';
+                    const dateStyle = todo.date ? "bg-[#FF6B6B10] text-[#FF6B6B] border border-[#FF6B6B]/40 focus:border-[#FF6B6B]" : "bg-[#1A1A1A] text-gray-400 border border-gray-700 focus:border-[#FF6B6B]";
+                    dateInput.className += ` ${dateStyle}`;
+                    if (isTemp) {
+                        dateInput.disabled = true;
+                        controlsDiv.querySelector('.delete-btn').disabled = true;
+                    }
+                }
+
+                const memoContainer = li.querySelector('.memo-container');
+                if (isArchiveView) {
+                    memoContainer.className += " p-4 border border-gray-800 min-h-[52px] whitespace-pre-wrap cursor-default";
+                    if (!todo.memo) {
+                        memoContainer.innerHTML = '<span class="text-gray-500">메모 없음</span>';
+                    } else {
+                        if (searchQuery) memoContainer.appendChild(createHighlightedNode(todo.memo, searchQuery));
+                        else memoContainer.textContent = todo.memo;
+                    }
+                } else {
+                    memoContainer.innerHTML = '<textarea class="w-full bg-transparent outline-none resize-none custom-scrollbar auto-resize p-4 border border-gray-800 rounded-xl focus:border-[#FF6B6B] transition-colors" rows="1" placeholder="메모 추가..."></textarea>';
+                    const ta = memoContainer.querySelector('textarea');
+                    ta.value = todo.memo || '';
+                    if (isTemp) ta.disabled = true;
+                }
+
+                // 이벤트 리스너 등록 (렌더링을 유발하지 않고 개별 노드만 부분 업데이트 후 서버 통신)
+                li.querySelector('.toggle-area').addEventListener('click', (e) => {
+                    if (['input', 'textarea', 'button', 'span'].includes(e.target.tagName.toLowerCase())) return;
+                    todo._isOpen = !todo._isOpen;
+                    li.querySelector('.details-content').classList.toggle('open');
+                });
+
                 cb.addEventListener('change', async () => {
                     const originalState = todo.completed;
+                    const originalCompletedAt = todo.completedAt;
+                    
                     todo.completed = cb.checked;
                     todo.completedAt = cb.checked ? new Date().toISOString().split('T')[0] : null;
                     
-                    updateCache(todo);
-                    if(todo.completed !== isArchiveView) todos = todos.filter(t => t.id !== todo.id);
-                    render();
+                    // 낙관적 UI 갱신
+                    titleP.className = `todo-title text-[16px] md:text-[18px] font-bold tracking-tight leading-snug flex items-center ${todo.completed ? 'line-through text-gray-200' : 'text-white'}`;
+                    
+                    if(todo.completed !== isArchiveView) {
+                        li.style.display = 'none'; // DOM 재생성 없이 화면에서 숨김
+                        todos = todos.filter(t => t.id !== todo.id);
+                    }
                     
                     try { 
                         await apiRequest(`/${todo.id}`, 'PATCH', { state: cb.checked ? 'closed' : 'open' }); 
                     } 
                     catch(e) { 
-                        optimisticCache.delete(todo.id);
+                        // 통신 실패 시 상태 롤백
                         todo.completed = originalState;
-                        if(todo.completed !== isArchiveView) todos.push(todo);
-                        render();
+                        todo.completedAt = originalCompletedAt;
+                        cb.checked = originalState;
+                        titleP.className = `todo-title text-[16px] md:text-[18px] font-bold tracking-tight leading-snug flex items-center ${todo.completed ? 'line-through text-gray-200' : 'text-white'}`;
+                        if(todo.completed === isArchiveView) {
+                            li.style.display = 'block';
+                            todos.push(todo);
+                        }
+                        alert('상태 업데이트에 실패하여 이전 상태로 복구되었습니다.');
                     }
                 });
 
@@ -384,41 +427,55 @@
                     ta.addEventListener('change', async () => { 
                         const oldMemo = todo.memo;
                         todo.memo = ta.value; 
-                        updateCache(todo);
                         try { 
                             await apiRequest(`/${todo.id}`, 'PATCH', { body: ta.value }); 
                             const logContent = ta.value ? `\n> ${ta.value.replace(/\n/g, '\n> ')}` : ' (내용 없음)';
                             postAutoLog(todo.id, `📝 **메모 업데이트:**${logContent}`);
                         } 
-                        catch(e) { optimisticCache.delete(todo.id); todo.memo = oldMemo; render(); }
+                        catch(e) { 
+                            todo.memo = oldMemo; 
+                            ta.value = oldMemo;
+                            autoResizeTextarea(ta);
+                            alert('메모 저장에 실패했습니다.'); 
+                        }
                     });
 
                     const dateInput = li.querySelector('.edit-date-input');
                     dateInput.addEventListener('change', async (e) => {
                         const oldDate = todo.date;
                         todo.date = e.target.value; 
-                        updateCache(todo);
-                        render();
+                        
+                        const dateStyle = todo.date ? "bg-[#FF6B6B10] text-[#FF6B6B] border border-[#FF6B6B]/40 focus:border-[#FF6B6B]" : "bg-[#1A1A1A] text-gray-400 border border-gray-700 focus:border-[#FF6B6B]";
+                        dateInput.className = `edit-date-input text-[11px] md:text-xs py-1 px-2 rounded cursor-pointer outline-none transition-colors ${dateStyle}`;
+                        
                         try {
                             const labels = todo.date ? [`target:${todo.date}`] : [];
                             await apiRequest(`/${todo.id}`, 'PATCH', { labels });
-                        } catch(err) { optimisticCache.delete(todo.id); todo.date = oldDate; render(); }
+                        } catch(err) { 
+                            todo.date = oldDate; 
+                            dateInput.value = oldDate || '';
+                            const revertStyle = oldDate ? "bg-[#FF6B6B10] text-[#FF6B6B] border border-[#FF6B6B]/40 focus:border-[#FF6B6B]" : "bg-[#1A1A1A] text-gray-400 border border-gray-700 focus:border-[#FF6B6B]";
+                            dateInput.className = `edit-date-input text-[11px] md:text-xs py-1 px-2 rounded cursor-pointer outline-none transition-colors ${revertStyle}`;
+                            alert('목표일 업데이트에 실패했습니다.');
+                        }
                     });
-                }
 
-                const deleteBtn = li.querySelector('.delete-btn');
-                if (deleteBtn) {
+                    const deleteBtn = li.querySelector('.delete-btn');
                     deleteBtn.addEventListener('click', async (e) => {
                         e.stopPropagation(); 
                         if(confirm(`해당 태스크를 완전히 삭제하시겠습니까?`)) {
                             const backup = {...todo};
+                            li.style.display = 'none'; // 즉시 숨김
                             todos = todos.filter(t => t.id !== todo.id);
-                            optimisticCache.delete(todo.id); 
-                            render();
+                            
                             try { 
                                 await apiRequest(`/${todo.id}`, 'PATCH', { state: 'closed', labels: ['deleted'] }); 
                             } 
-                            catch(e) { todos.push(backup); render(); }
+                            catch(e) { 
+                                todos.push(backup); 
+                                li.style.display = 'block'; 
+                                alert('삭제에 실패했습니다.'); 
+                            }
                         }
                     });
                 }
@@ -445,7 +502,7 @@
             };
             todos.unshift(tempTask);
             input.value = ''; date.value = '';
-            render();
+            render(); // 신규 생성 시에는 전체 리스트 동기화를 위해 render 허용
             
             try {
                 const labels = dateVal ? [`target:${dateVal}`] : [];
@@ -454,13 +511,19 @@
                 const idx = todos.findIndex(t => t.id === tempId);
                 if(idx > -1) {
                     todos[idx].id = res.number;
-                    updateCache(todos[idx]); 
-                    render();
+                    const node = document.getElementById(`todo-${tempId}`);
+                    if (node) {
+                        node.id = `todo-${res.number}`;
+                        const tempBadge = node.querySelector('.temp-badge');
+                        if (tempBadge) tempBadge.remove();
+                        node.querySelectorAll('input, textarea, button').forEach(el => el.disabled = false);
+                    }
                 }
             } catch(e) { 
                 todos = todos.filter(t => t.id !== tempId);
                 input.value = titleVal;
                 render();
+                alert('태스크 생성에 실패했습니다.');
             }
         }
 
