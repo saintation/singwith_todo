@@ -262,4 +262,159 @@
                 
                 const isTemp = String(todo.id).startsWith('temp-');
                 const isMemoMatched = isArchiveView && searchQuery && todo.memo && todo.memo.toLowerCase().includes(searchQuery);
-                const displayTitle = (isArchiveView && searchQuery) ?
+                const displayTitle = (isArchiveView && searchQuery) ? getHighlightedText(todo.text, searchQuery) : todo.text;
+                const displayMemo = (isArchiveView && searchQuery) ? getHighlightedText(todo.memo, searchQuery) : (todo.memo || '');
+
+                const dateBadge = todo.date ? `<div class="text-[11px] font-semibold text-[#FF6B6B] mt-2 bg-[#FF6B6B10] w-fit px-2 py-0.5 rounded">목표: ${todo.date}</div>` : '';
+                const archiveBadge = `<div class="flex gap-2 mt-2"><div class="text-[11px] font-semibold text-gray-500 bg-[#1A1A1A] border border-gray-800 w-fit px-2 py-0.5 rounded">🎯 목표: ${todo.date || '없음'}</div><div class="text-[11px] font-semibold text-gray-500 bg-[#1A1A1A] border border-gray-800 w-fit px-2 py-0.5 rounded">✅ 완료: ${todo.completedAt || '알수없음'}</div></div>`;
+
+                const memoAreaHtml = isArchiveView 
+                    ? `<div class="w-full bg-[#141414] p-4 rounded-xl text-sm text-gray-200 border border-gray-800 min-h-[96px] whitespace-pre-wrap cursor-default mt-2">${displayMemo || '<span class="text-gray-500">메모 없음</span>'}</div>`
+                    : `<textarea class="w-full bg-[#141414] p-4 rounded-xl text-sm text-gray-200 border border-gray-800 focus:border-[#FF6B6B] h-24 custom-scrollbar mt-2" placeholder="메모 추가..." ${isTemp ? 'disabled' : ''}>${todo.memo}</textarea>`;
+                
+                const dateDeleteHtml = isArchiveView 
+                    ? `<div class="w-full flex justify-end"><button class="delete-btn text-[11px] text-red-500 bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded transition-colors font-bold mt-3">삭제</button></div>`
+                    : `<div class="flex justify-between items-center mt-3 pt-3 border-t border-gray-800"><div class="flex items-center gap-2"><span class="text-[11px] text-gray-500 font-medium">목표일:</span><input type="date" class="edit-date-input text-[11px] py-1 px-2" value="${todo.date}" ${isTemp ? 'disabled' : ''}></div><button class="delete-btn text-[11px] text-red-500 bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded transition-colors font-bold">삭제</button></div>`;
+
+                const detailsOpenClass = isMemoMatched || todo._isOpen ? 'open' : '';
+
+                li.innerHTML = `
+                    <div class="flex items-start gap-4 cursor-pointer toggle-area">
+                        <input type="checkbox" ${todo.completed ? 'checked' : ''} class="mt-1 w-6 h-6 accent-[#FF6B6B] rounded-lg cursor-pointer shrink-0" ${isTemp ? 'disabled' : ''}>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-[16px] md:text-[18px] font-bold tracking-tight leading-snug ${todo.completed ? 'line-through text-gray-500' : 'text-white'}">${displayTitle} ${isTemp ? '<span class="text-xs text-[#FF6B6B] ml-2 animate-pulse">저장 중...</span>' : ''}</p>
+                            ${isArchiveView ? archiveBadge : dateBadge}
+                        </div>
+                    </div>
+                    <div class="details-content cursor-default ${detailsOpenClass}" onclick="event.stopPropagation()">
+                        ${memoAreaHtml}
+                        ${dateDeleteHtml}
+                    </div>
+                `;
+                
+                li.querySelector('.toggle-area').addEventListener('click', () => {
+                    todo._isOpen = !todo._isOpen;
+                    render();
+                });
+
+                // 자동 로그: 상태 변경
+                const cb = li.querySelector('input[type="checkbox"]');
+                cb.addEventListener('change', async () => {
+                    const originalState = todo.completed;
+                    todo.completed = cb.checked;
+                    todo.completedAt = cb.checked ? new Date().toISOString().split('T')[0] : null;
+                    if(todo.completed !== isArchiveView) todos = todos.filter(t => t.id !== todo.id);
+                    render();
+                    
+                    try { 
+                        await apiRequest(`/${todo.id}`, 'PATCH', { state: cb.checked ? 'closed' : 'open' }); 
+                        postAutoLog(todo.id, `✅ **상태 변경:** ${cb.checked ? '완료됨 (Archive)' : '진행 중 (Active)'}`);
+                    } 
+                    catch(e) { 
+                        alert('상태 변경 실패'); 
+                        todo.completed = originalState;
+                        todos.push(todo);
+                        render();
+                    }
+                });
+
+                if (!isArchiveView && !isTemp) {
+                    // 자동 로그: 메모 변경
+                    const ta = li.querySelector('textarea');
+                    ta.addEventListener('change', async () => { 
+                        const oldMemo = todo.memo;
+                        todo.memo = ta.value; 
+                        try { 
+                            await apiRequest(`/${todo.id}`, 'PATCH', { body: ta.value }); 
+                            const logContent = ta.value ? `\n> ${ta.value.replace(/\n/g, '\n> ')}` : ' (내용 없음)';
+                            postAutoLog(todo.id, `📝 **메모 내용 업데이트:**${logContent}`);
+                        } 
+                        catch(e) { todo.memo = oldMemo; alert('저장 실패'); render(); }
+                    });
+
+                    // 자동 로그: 날짜 변경
+                    const dateInput = li.querySelector('.edit-date-input');
+                    dateInput.addEventListener('change', async (e) => {
+                        const oldDate = todo.date;
+                        todo.date = e.target.value;
+                        render();
+                        try {
+                            const labels = todo.date ? [`target:${todo.date}`] : [];
+                            await apiRequest(`/${todo.id}`, 'PATCH', { labels });
+                            
+                            const logMsg = todo.date 
+                                ? `📅 **목표일 설정/변경:** ${todo.date}` 
+                                : `📅 **목표일 삭제됨**`;
+                            postAutoLog(todo.id, logMsg);
+                        } catch(err) { todo.date = oldDate; alert('저장 실패'); render(); }
+                    });
+                }
+
+                const deleteBtn = li.querySelector('.delete-btn');
+                deleteBtn.addEventListener('click', async () => {
+                    if(confirm(`해당 태스크를 완전히 삭제하시겠습니까?`)) {
+                        const backup = {...todo};
+                        todos = todos.filter(t => t.id !== todo.id);
+                        render();
+                        try { 
+                            await apiRequest(`/${todo.id}`, 'PATCH', { state: 'closed', labels: ['deleted'] }); 
+                            postAutoLog(todo.id, `🗑️ **태스크 영구 삭제 처리됨 (Soft Delete)**`);
+                        } 
+                        catch(e) { alert('삭제 실패'); todos.push(backup); render(); }
+                    }
+                });
+
+                list.appendChild(li);
+            });
+        }
+
+        async function addTask() {
+            const input = document.getElementById('newTodo');
+            const date = document.getElementById('newDate');
+            const titleVal = input.value.trim();
+            const dateVal = date.value;
+            if(!titleVal) return;
+            
+            const tempId = 'temp-' + Date.now();
+            const tempTask = {
+                id: tempId, text: titleVal, memo: '', date: dateVal,
+                completed: false, _isOpen: false
+            };
+            todos.unshift(tempTask);
+            input.value = ''; date.value = '';
+            render();
+            
+            try {
+                const labels = dateVal ? [`target:${dateVal}`] : [];
+                const res = await apiRequest('', 'POST', { title: titleVal, body: '', labels });
+                
+                const idx = todos.findIndex(t => t.id === tempId);
+                if(idx > -1) {
+                    todos[idx].id = res.number;
+                    render();
+                    postAutoLog(res.number, `✨ **태스크 생성됨**\n${dateVal ? `목표일: ${dateVal}` : ''}`);
+                }
+            } catch(e) { 
+                alert('태스크 추가에 실패했습니다. 네트워크를 확인하세요.'); 
+                todos = todos.filter(t => t.id !== tempId);
+                input.value = titleVal;
+                render();
+            }
+        }
+
+        function toggleView() {
+            isArchiveView = !isArchiveView;
+            
+            document.getElementById('viewTitle').innerText = isArchiveView ? 'Archives' : 'Active Tasks';
+            document.getElementById('viewBtn').innerText = isArchiveView ? '← Active' : 'Archive →';
+            
+            document.getElementById('inputSection').style.display = isArchiveView ? 'none' : 'block';
+            document.getElementById('searchSection').style.display = isArchiveView ? 'block' : 'none';
+            document.getElementById('archiveFilterSection').style.display = isArchiveView ? 'block' : 'none';
+            
+            document.getElementById('searchInput').value = '';
+            reloadTasks(true);
+        }
+    </script>
+</body>
+</html>
