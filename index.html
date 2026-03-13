@@ -247,7 +247,6 @@
             return await res.json();
         }
 
-        // 오직 메모 변경에 대해서만 댓글 로그를 남깁니다.
         function postAutoLog(issueId, message) {
             apiRequest(`/${issueId}/comments`, 'POST', { body: message }).catch(e => console.error("Auto-log failed", e));
         }
@@ -297,7 +296,6 @@
                 const displayTitle = (isArchiveView && searchQuery) ? getHighlightedText(todo.text, searchQuery) : todo.text;
                 const displayMemo = (isArchiveView && searchQuery) ? getHighlightedText(todo.memo, searchQuery) : (todo.memo || '');
 
-                // 아카이브 글자색상을 메모 영역(text-gray-200)과 통일
                 const titleColorClass = todo.completed ? 'line-through text-gray-200' : 'text-white';
                 const archiveBadge = `<div class="flex gap-2"><div class="text-[11px] md:text-xs font-semibold text-gray-200 bg-[#1A1A1A] border border-gray-800 w-fit px-2 py-0.5 rounded">🎯 목표: ${todo.date || '없음'}</div><div class="text-[11px] md:text-xs font-semibold text-gray-200 bg-[#1A1A1A] border border-gray-800 w-fit px-2 py-0.5 rounded">✅ 완료: ${todo.completedAt || '알수없음'}</div></div>`;
 
@@ -305,10 +303,14 @@
                     ? "bg-[#FF6B6B10] text-[#FF6B6B] border border-[#FF6B6B]/40 focus:border-[#FF6B6B]" 
                     : "bg-[#1A1A1A] text-gray-400 border border-gray-700 focus:border-[#FF6B6B]";
                 
-                const activeDateHtml = `
-                    <div class="flex items-center gap-2" onclick="event.stopPropagation()">
-                        <input type="date" class="edit-date-input text-[11px] md:text-xs py-1 px-2 rounded cursor-pointer outline-none transition-colors ${dateInputStyle}" value="${todo.date || ''}" ${isTemp ? 'disabled' : ''}>
-                        ${!todo.date ? '<span class="text-[11px] text-gray-500 font-medium cursor-pointer" onclick="this.previousElementSibling.showPicker()">목표일 지정</span>' : ''}
+                // Active 화면: 삭제 버튼이 날짜 인풋과 한 줄에 배치됨
+                const activeDateAndControlsHtml = `
+                    <div class="flex items-center justify-between w-full">
+                        <div class="flex items-center gap-2" onclick="event.stopPropagation()">
+                            <input type="date" class="edit-date-input text-[11px] md:text-xs py-1 px-2 rounded cursor-pointer outline-none transition-colors ${dateInputStyle}" value="${todo.date || ''}" ${isTemp ? 'disabled' : ''}>
+                            ${!todo.date ? '<span class="text-[11px] text-gray-500 font-medium cursor-pointer" onclick="this.previousElementSibling.showPicker()">목표일 지정</span>' : ''}
+                        </div>
+                        <button class="delete-btn text-[11px] text-red-500 bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded transition-colors font-bold shrink-0" ${isTemp ? 'disabled' : ''}>삭제</button>
                     </div>
                 `;
 
@@ -316,8 +318,6 @@
                     ? `<div class="w-full bg-[#141414] p-4 rounded-xl text-sm text-gray-200 border border-gray-800 min-h-[52px] whitespace-pre-wrap cursor-default mt-2">${displayMemo || '<span class="text-gray-500">메모 없음</span>'}</div>`
                     : `<textarea class="w-full bg-[#141414] p-4 rounded-xl text-sm text-gray-200 border border-gray-800 focus:border-[#FF6B6B] mt-2 custom-scrollbar auto-resize" rows="1" placeholder="메모 추가..." ${isTemp ? 'disabled' : ''}>${todo.memo}</textarea>`;
                 
-                const deleteHtml = `<div class="w-full flex justify-end mt-3 pt-3 border-t border-gray-800"><button class="delete-btn text-[11px] text-red-500 bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded transition-colors font-bold">삭제</button></div>`;
-
                 const detailsOpenClass = isMemoMatched || todo._isOpen ? 'open' : '';
 
                 li.innerHTML = `
@@ -325,14 +325,13 @@
                         <input type="checkbox" ${todo.completed ? 'checked' : ''} class="mt-1 w-6 h-6 accent-[#FF6B6B] rounded-lg cursor-pointer shrink-0" ${isTemp ? 'disabled' : ''}>
                         <div class="flex-1 min-w-0">
                             <p class="text-[16px] md:text-[18px] font-bold tracking-tight leading-snug ${titleColorClass}">${displayTitle} ${isTemp ? '<span class="text-xs text-[#FF6B6B] ml-2 animate-pulse">저장 중...</span>' : ''}</p>
-                            <div class="mt-1.5 min-h-[20px] flex items-center" onclick="event.stopPropagation()">
-                                ${isArchiveView ? archiveBadge : activeDateHtml}
+                            <div class="mt-1.5 min-h-[20px] flex items-center w-full">
+                                ${isArchiveView ? archiveBadge : activeDateAndControlsHtml}
                             </div>
                         </div>
                     </div>
                     <div class="details-content cursor-default ${detailsOpenClass}" onclick="event.stopPropagation()">
                         ${memoAreaHtml}
-                        ${deleteHtml}
                     </div>
                 `;
                 
@@ -354,7 +353,6 @@
                     
                     try { 
                         await apiRequest(`/${todo.id}`, 'PATCH', { state: cb.checked ? 'closed' : 'open' }); 
-                        // 상태 변경 자동 로그 제거 완료
                     } 
                     catch(e) { 
                         optimisticCache.delete(todo.id);
@@ -373,7 +371,6 @@
                         updateCache(todo);
                         try { 
                             await apiRequest(`/${todo.id}`, 'PATCH', { body: ta.value }); 
-                            // 오직 메모 변경만 자동 로그로 전송합니다.
                             const logContent = ta.value ? `\n> ${ta.value.replace(/\n/g, '\n> ')}` : ' (내용 없음)';
                             postAutoLog(todo.id, `📝 **메모 업데이트:**${logContent}`);
                         } 
@@ -389,25 +386,27 @@
                         try {
                             const labels = todo.date ? [`target:${todo.date}`] : [];
                             await apiRequest(`/${todo.id}`, 'PATCH', { labels });
-                            // 날짜 변경 자동 로그 제거 완료
                         } catch(err) { optimisticCache.delete(todo.id); todo.date = oldDate; render(); }
                     });
                 }
 
+                // 삭제 버튼 이벤트 (Active 뷰에서만 렌더링되므로 null 체크)
                 const deleteBtn = li.querySelector('.delete-btn');
-                deleteBtn.addEventListener('click', async () => {
-                    if(confirm(`해당 태스크를 완전히 삭제하시겠습니까?`)) {
-                        const backup = {...todo};
-                        todos = todos.filter(t => t.id !== todo.id);
-                        optimisticCache.delete(todo.id); 
-                        render();
-                        try { 
-                            await apiRequest(`/${todo.id}`, 'PATCH', { state: 'closed', labels: ['deleted'] }); 
-                            // 삭제 자동 로그 제거 완료
-                        } 
-                        catch(e) { todos.push(backup); render(); }
-                    }
-                });
+                if (deleteBtn) {
+                    deleteBtn.addEventListener('click', async (e) => {
+                        e.stopPropagation(); // 혹시 모를 이벤트 전파 추가 차단
+                        if(confirm(`해당 태스크를 완전히 삭제하시겠습니까?`)) {
+                            const backup = {...todo};
+                            todos = todos.filter(t => t.id !== todo.id);
+                            optimisticCache.delete(todo.id); 
+                            render();
+                            try { 
+                                await apiRequest(`/${todo.id}`, 'PATCH', { state: 'closed', labels: ['deleted'] }); 
+                            } 
+                            catch(e) { todos.push(backup); render(); }
+                        }
+                    });
+                }
 
                 list.appendChild(li);
             });
@@ -442,7 +441,6 @@
                     todos[idx].id = res.number;
                     updateCache(todos[idx]); 
                     render();
-                    // 생성 자동 로그 제거 완료
                 }
             } catch(e) { 
                 todos = todos.filter(t => t.id !== tempId);
@@ -457,7 +455,6 @@
             document.getElementById('viewTitle').innerText = isArchiveView ? 'Archives' : 'Active Tasks';
             document.getElementById('viewBtn').innerText = isArchiveView ? '← Active' : 'Archive →';
             
-            // Flex box 제어를 위해 display: flex 속성 부여
             document.getElementById('inputSection').style.display = isArchiveView ? 'none' : 'block';
             document.getElementById('searchSection').style.display = isArchiveView ? 'flex' : 'none';
             document.getElementById('archiveFilterSection').style.display = isArchiveView ? 'block' : 'none';
