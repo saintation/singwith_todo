@@ -30,8 +30,8 @@
     <div id="loginLayer" class="fixed inset-0 z-50 flex items-center justify-center bg-[#0F0F0F]">
         <div class="w-full max-w-sm p-8 text-center">
             <h1 class="text-3xl font-black mb-10 tracking-tighter text-[#FF6B6B]">Singwith To-Do List</h1>
-            <input type="text" id="repoInput" placeholder="리포지토리 (예: username/repo)" class="w-full bg-[#1A1A1A] border border-gray-800 rounded-xl p-4 mb-4 text-white">
-            <input type="password" id="patInput" placeholder="GitHub PAT (Access Token)" class="w-full bg-[#1A1A1A] border border-gray-800 rounded-xl p-4 mb-8 text-white">
+            <input type="text" id="repoInput" placeholder="리포지토리 (예: username/repo)" class="w-full min-w-0 bg-[#1A1A1A] border border-gray-800 rounded-xl p-4 mb-4 text-white">
+            <input type="password" id="patInput" placeholder="GitHub PAT (Access Token)" class="w-full min-w-0 bg-[#1A1A1A] border border-gray-800 rounded-xl p-4 mb-8 text-white">
             <button onclick="initialize()" class="w-full bg-[#FF6B6B] text-white py-4 rounded-xl font-bold hover:bg-[#e55a5a] active:scale-95 transition-all shadow-lg">접속하기</button>
         </div>
     </div>
@@ -47,35 +47,38 @@
                 <button onclick="toggleView()" id="viewBtn" class="text-sm font-medium text-gray-500 hover:text-[#FF6B6B] transition-colors pb-1 border-b border-transparent hover:border-[#FF6B6B]">Archive →</button>
             </div>
 
-            <div id="searchSection" class="mb-4 search-input-group hidden flex gap-2">
-                <div class="relative flex-1">
-                    <svg class="w-4 h-4 text-gray-500 absolute left-4 top-1/2 transform -translate-y-1/2 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <div id="searchSection" class="mb-4 search-input-group hidden flex gap-2 w-full">
+                <input type="text" id="searchInput" placeholder="검색어 입력 후 Enter..." class="flex-1 min-w-0 w-full bg-[#222222] border border-gray-800 rounded-xl py-2.5 px-4 focus:border-[#FF6B6B] text-sm text-white placeholder-gray-500 shadow-sm">
+                <button onclick="reloadTasks(true)" class="bg-[#252525] border border-gray-800 text-gray-400 w-[42px] h-[42px] rounded-xl hover:bg-[#FF6B6B] hover:text-white hover:border-[#FF6B6B] flex items-center justify-center shrink-0 transition-all shadow-sm">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                     </svg>
-                    <input type="text" id="searchInput" placeholder="검색어 입력 후 Enter..." class="w-full bg-[#222222] border border-gray-800 rounded-xl py-2.5 pl-11 pr-4 focus:border-[#FF6B6B] text-sm text-white placeholder-gray-500 shadow-sm">
-                </div>
-                <button onclick="reloadTasks(true)" class="bg-[#252525] border border-gray-800 text-gray-300 px-4 rounded-xl hover:bg-[#FF6B6B] hover:text-white hover:border-[#FF6B6B] text-sm font-bold shrink-0 transition-all shadow-sm">조회</button>
+                </button>
             </div>
 
             <div id="inputSection" class="mb-6 space-y-3 block">
-                <div class="flex gap-3 items-center">
-                    <input type="text" id="newTodo" placeholder="What's next?" class="flex-1 bg-transparent border-b-2 border-gray-800 py-2 focus:border-[#FF6B6B] text-lg font-medium text-white">
+                <div class="flex gap-3 items-center w-full">
+                    <input type="text" id="newTodo" placeholder="What's next?" class="flex-1 min-w-0 bg-transparent border-b-2 border-gray-800 py-2 focus:border-[#FF6B6B] text-lg font-medium text-white">
                     <button onclick="addTask()" class="bg-[#FF6B6B] text-white px-5 py-2.5 rounded-xl font-bold hover:bg-[#e55a5a] active:scale-95 transition-all shadow-md shrink-0">Add</button>
                 </div>
-                <div class="flex items-center gap-3">
-                    <span class="text-sm text-gray-400 font-medium whitespace-nowrap">목표일 (선택):</span>
-                    <input type="date" id="newDate" class="flex-1 max-w-[160px] text-sm py-1.5 px-3 bg-[#252525] rounded-lg border border-gray-800">
+                <div class="flex items-center gap-3 w-full">
+                    <span class="text-sm text-gray-400 font-medium whitespace-nowrap shrink-0">목표일 (선택):</span>
+                    <input type="date" id="newDate" class="flex-1 min-w-0 max-w-[160px] text-sm py-1.5 px-3 bg-[#252525] rounded-lg border border-gray-800">
                 </div>
             </div>
 
             <div id="archiveFilterSection" class="mb-6 hidden">
                 <div class="flex flex-col gap-3 bg-[#222222] p-4 rounded-xl border border-gray-800">
                     <label class="text-sm text-[#FF6B6B] font-bold">조회 기간 (완료일 기준)</label>
-                    <div class="flex items-center gap-2">
-                        <input type="date" id="filterStart" class="flex-1 text-sm py-2 px-3 bg-[#1A1A1A] border border-gray-700 rounded-lg">
-                        <span class="text-gray-500 font-bold">~</span>
-                        <input type="date" id="filterEnd" class="flex-1 text-sm py-2 px-3 bg-[#1A1A1A] border border-gray-700 rounded-lg">
-                        <button onclick="reloadTasks(true)" class="bg-gray-800 text-xs px-3 py-2 rounded text-white hover:bg-gray-700">조회</button>
+                    <div class="flex items-center gap-2 w-full">
+                        <input type="date" id="filterStart" class="flex-1 min-w-0 text-sm py-2 px-2 bg-[#1A1A1A] border border-gray-700 rounded-lg">
+                        <span class="text-gray-500 font-bold shrink-0">~</span>
+                        <input type="date" id="filterEnd" class="flex-1 min-w-0 text-sm py-2 px-2 bg-[#1A1A1A] border border-gray-700 rounded-lg">
+                        <button onclick="reloadTasks(true)" class="bg-gray-800 text-gray-400 w-[36px] h-[36px] rounded-lg hover:bg-gray-700 hover:text-white flex items-center justify-center shrink-0 transition-all">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -303,7 +306,6 @@
                     ? "bg-[#FF6B6B10] text-[#FF6B6B] border border-[#FF6B6B]/40 focus:border-[#FF6B6B]" 
                     : "bg-[#1A1A1A] text-gray-400 border border-gray-700 focus:border-[#FF6B6B]";
                 
-                // Active 화면: 삭제 버튼이 날짜 인풋과 한 줄에 배치됨
                 const activeDateAndControlsHtml = `
                     <div class="flex items-center justify-between w-full">
                         <div class="flex items-center gap-2" onclick="event.stopPropagation()">
@@ -390,11 +392,10 @@
                     });
                 }
 
-                // 삭제 버튼 이벤트 (Active 뷰에서만 렌더링되므로 null 체크)
                 const deleteBtn = li.querySelector('.delete-btn');
                 if (deleteBtn) {
                     deleteBtn.addEventListener('click', async (e) => {
-                        e.stopPropagation(); // 혹시 모를 이벤트 전파 추가 차단
+                        e.stopPropagation(); 
                         if(confirm(`해당 태스크를 완전히 삭제하시겠습니까?`)) {
                             const backup = {...todo};
                             todos = todos.filter(t => t.id !== todo.id);
