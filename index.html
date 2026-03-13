@@ -11,20 +11,18 @@
         body { font-family: 'Pretendard', sans-serif; background-color: #0F0F0F; color: #FFFFFF; }
         
         .details-content { max-height: 0; overflow: hidden; opacity: 0; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .details-content.open { max-height: 400px; opacity: 1; margin-top: 0.5rem; }
+        .details-content.open { max-height: 2000px; opacity: 1; margin-top: 0.5rem; } /* 높이 제한 해제 */
         
         .loading-overlay { backdrop-filter: blur(8px); background: rgba(15, 15, 15, 0.8); }
         .mini-spinner { border: 2px solid #333; border-top-color: #FF6B6B; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         
-        input[type="date"], input[type="text"], textarea { font-family: inherit; outline: none; transition: border-color 0.2s; }
-        input[type="date"] { background: #252525; border-radius: 8px; border: 1px solid #333; cursor: pointer; color: #E0E0E0; }
-        input[type="date"]:focus { border-color: #FF6B6B; }
-        .edit-date-input { background: #1A1A1A; border: 1px solid #333; color: #E0E0E0; cursor: pointer; border-radius: 6px; }
-        .edit-date-input:focus { border-color: #FF6B6B; }
+        input[type="date"], input[type="text"], textarea { font-family: inherit; outline: none; transition: border-color 0.2s, background-color 0.2s; }
+        
+        /* 플렉시블 텍스트에어리어 기본 설정 */
+        textarea { resize: none; overflow: hidden; min-height: 52px; }
         
         .search-input-group:focus-within svg { color: #FF6B6B; }
-        
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
     </style>
@@ -65,7 +63,7 @@
                 </div>
                 <div class="flex items-center gap-3">
                     <span class="text-sm text-gray-400 font-medium whitespace-nowrap">목표일 (선택):</span>
-                    <input type="date" id="newDate" class="flex-1 max-w-[160px] text-sm py-1.5 px-3">
+                    <input type="date" id="newDate" class="flex-1 max-w-[160px] text-sm py-1.5 px-3 bg-[#252525] rounded-lg border border-gray-800">
                 </div>
             </div>
 
@@ -73,9 +71,9 @@
                 <div class="flex flex-col gap-3 bg-[#222222] p-4 rounded-xl border border-gray-800">
                     <label class="text-sm text-[#FF6B6B] font-bold">조회 기간 (완료일 기준)</label>
                     <div class="flex items-center gap-2">
-                        <input type="date" id="filterStart" class="flex-1 text-sm py-2 px-3">
+                        <input type="date" id="filterStart" class="flex-1 text-sm py-2 px-3 bg-[#1A1A1A] border border-gray-700 rounded-lg">
                         <span class="text-gray-500 font-bold">~</span>
-                        <input type="date" id="filterEnd" class="flex-1 text-sm py-2 px-3">
+                        <input type="date" id="filterEnd" class="flex-1 text-sm py-2 px-3 bg-[#1A1A1A] border border-gray-700 rounded-lg">
                         <button onclick="reloadTasks(true)" class="bg-gray-800 text-xs px-3 py-2 rounded text-white hover:bg-gray-700">조회</button>
                     </div>
                 </div>
@@ -99,6 +97,9 @@
         let isFetching = false;
         let hasMore = true;
 
+        // 동기화 지연 방어용 낙관적 로컬 캐시
+        const optimisticCache = new Map();
+
         const todayDate = new Date();
         const lastWeekDate = new Date();
         lastWeekDate.setDate(todayDate.getDate() - 7);
@@ -120,6 +121,17 @@
             const safeText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
             const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
             return safeText.replace(regex, `<span class="bg-[#FF6B6B] text-white px-1 rounded-sm">$1</span>`);
+        }
+
+        // 캐시 업데이트 함수
+        function updateCache(todo) {
+            optimisticCache.set(todo.id, { ...todo, _cachedAt: Date.now() });
+        }
+
+        // 텍스트에어리어 자동 리사이징 함수
+        function autoResizeTextarea(ta) {
+            ta.style.height = 'auto';
+            ta.style.height = (ta.scrollHeight) + 'px';
         }
 
         async function initialize() {
@@ -156,6 +168,12 @@
             if(!isInitial) document.getElementById('bottomLoading').classList.remove('hidden');
 
             try {
+                // 오래된 캐시(30초 경과) 정리
+                const now = Date.now();
+                for (const [id, task] of optimisticCache.entries()) {
+                    if (now - task._cachedAt > 30000) optimisticCache.delete(id);
+                }
+
                 let url;
                 if (isArchiveView) {
                     const start = document.getElementById('filterStart').value;
@@ -177,25 +195,44 @@
 
                 const newTodos = items.filter(i => !i.pull_request && !i.labels.some(l => l.name === 'deleted')).map(issue => {
                     const targetLabel = issue.labels.find(l => l.name.startsWith('target:'));
-                    const existing = todos.find(t => t.id === issue.number);
-                    if(existing) return existing;
-
-                    // 핵심: 메모(body)가 존재하면 기본적으로 열려있도록 설정
-                    const hasMemo = !!(issue.body && issue.body.trim());
-
-                    return {
+                    
+                    let parsedTask = {
                         id: issue.number,
                         text: issue.title,
                         memo: issue.body || '',
                         date: targetLabel ? targetLabel.name.replace('target:', '') : '',
                         completed: issue.state === 'closed',
                         completedAt: issue.closed_at ? issue.closed_at.split('T')[0] : null,
-                        _isOpen: hasMemo // 메모가 있으면 리프레시 시 자동 펼침
+                        _isOpen: !!(issue.body && issue.body.trim()) // 메모가 있으면 항상 오픈
                     };
+
+                    // API 데이터와 로컬 캐시 병합
+                    if (optimisticCache.has(parsedTask.id)) {
+                        const cached = optimisticCache.get(parsedTask.id);
+                        if (parsedTask.completed === cached.completed && parsedTask.memo === cached.memo && parsedTask.date === cached.date) {
+                            optimisticCache.delete(parsedTask.id); // 깃허브가 최신 상태를 반영했으면 캐시 삭제
+                        } else {
+                            parsedTask = { ...cached }; // 깃허브가 아직 느리면 로컬 캐시로 강제 덮어쓰기
+                        }
+                    }
+                    return parsedTask;
                 }).filter(Boolean);
 
+                // API에서는 못 가져왔지만, 로컬 캐시에는 있는 데이터 강제 주입 (방금 상태를 변경한 태스크)
+                const fetchedIds = new Set(newTodos.map(t => t.id));
+                for (const [id, cached] of optimisticCache.entries()) {
+                    if (!fetchedIds.has(id)) {
+                        if (isArchiveView && cached.completed) newTodos.push(cached);
+                        else if (!isArchiveView && !cached.completed) newTodos.push(cached);
+                    }
+                }
+
                 if (page === 1) todos = newTodos;
-                else todos = [...todos, ...newTodos];
+                else {
+                    // 중복 제거 후 합치기
+                    const existingIds = new Set(todos.map(t => t.id));
+                    newTodos.forEach(nt => { if(!existingIds.has(nt.id)) todos.push(nt); });
+                }
                 
                 currentPage = page;
                 render();
@@ -227,11 +264,13 @@
             let displayTodos = [...todos];
             
             if (isArchiveView) {
+                displayTodos = displayTodos.filter(t => t.completed);
                 displayTodos.sort((a, b) => {
                     if (a.completedAt && b.completedAt) return a.completedAt > b.completedAt ? -1 : (a.completedAt < b.completedAt ? 1 : 0);
                     return 0;
                 });
             } else {
+                displayTodos = displayTodos.filter(t => !t.completed);
                 displayTodos.sort((a, b) => {
                     if (a.date && b.date) return a.date === b.date ? a.text.localeCompare(b.text) : (a.date < b.date ? -1 : 1);
                     if (a.date) return -1;
@@ -263,26 +302,23 @@
                 const displayTitle = (isArchiveView && searchQuery) ? getHighlightedText(todo.text, searchQuery) : todo.text;
                 const displayMemo = (isArchiveView && searchQuery) ? getHighlightedText(todo.memo, searchQuery) : (todo.memo || '');
 
-                const dateBadge = todo.date ? `<div class="text-[11px] md:text-xs font-semibold text-[#FF6B6B] bg-[#FF6B6B10] w-fit px-2 py-0.5 rounded">🎯 목표: ${todo.date}</div>` : '';
                 const archiveBadge = `<div class="flex gap-2"><div class="text-[11px] md:text-xs font-semibold text-gray-500 bg-[#1A1A1A] border border-gray-800 w-fit px-2 py-0.5 rounded">🎯 목표: ${todo.date || '없음'}</div><div class="text-[11px] md:text-xs font-semibold text-gray-500 bg-[#1A1A1A] border border-gray-800 w-fit px-2 py-0.5 rounded">✅ 완료: ${todo.completedAt || '알수없음'}</div></div>`;
 
-                // 통합된 목표일 입력 UI 로직 (펼쳐졌을 때 작동)
-                const activeDateHtml = todo._isOpen ? (
-                    todo.date ? 
-                    `<div class="relative inline-flex items-center group">
-                        <div class="text-[11px] md:text-xs font-semibold text-[#FF6B6B] bg-[#FF6B6B10] px-2 py-0.5 rounded cursor-pointer border border-transparent group-hover:border-[#FF6B6B]/30 transition-colors">🎯 목표: ${todo.date}</div>
-                        <input type="date" class="edit-date-input absolute inset-0 w-full h-full opacity-0 cursor-pointer" value="${todo.date}" ${isTemp ? 'disabled' : ''}>
-                    </div>` 
-                    : 
-                    `<div class="flex items-center gap-2">
-                        <input type="date" class="edit-date-input text-[11px] md:text-xs py-0.5 px-2 bg-[#1A1A1A] border border-gray-700 rounded text-gray-300 focus:border-[#FF6B6B] outline-none" value="" ${isTemp ? 'disabled' : ''}>
-                        <span class="text-[11px] text-gray-500 font-medium">목표일 지정</span>
-                    </div>`
-                ) : dateBadge;
+                // 통합된 목표일 입력 UI
+                const dateInputStyle = todo.date 
+                    ? "bg-[#FF6B6B10] text-[#FF6B6B] border border-[#FF6B6B]/40 focus:border-[#FF6B6B]" 
+                    : "bg-[#1A1A1A] text-gray-400 border border-gray-700 focus:border-[#FF6B6B]";
+                
+                const activeDateHtml = `
+                    <div class="flex items-center gap-2" onclick="event.stopPropagation()">
+                        <input type="date" class="edit-date-input text-[11px] md:text-xs py-1 px-2 rounded cursor-pointer outline-none transition-colors ${dateInputStyle}" value="${todo.date || ''}" ${isTemp ? 'disabled' : ''}>
+                        ${!todo.date ? '<span class="text-[11px] text-gray-500 font-medium cursor-pointer" onclick="this.previousElementSibling.showPicker()">목표일 지정</span>' : ''}
+                    </div>
+                `;
 
                 const memoAreaHtml = isArchiveView 
-                    ? `<div class="w-full bg-[#141414] p-4 rounded-xl text-sm text-gray-200 border border-gray-800 min-h-[96px] whitespace-pre-wrap cursor-default">${displayMemo || '<span class="text-gray-500">메모 없음</span>'}</div>`
-                    : `<textarea class="w-full bg-[#141414] p-4 rounded-xl text-sm text-gray-200 border border-gray-800 focus:border-[#FF6B6B] h-24 custom-scrollbar" placeholder="메모 추가..." ${isTemp ? 'disabled' : ''}>${todo.memo}</textarea>`;
+                    ? `<div class="w-full bg-[#141414] p-4 rounded-xl text-sm text-gray-200 border border-gray-800 min-h-[52px] whitespace-pre-wrap cursor-default mt-2">${displayMemo || '<span class="text-gray-500">메모 없음</span>'}</div>`
+                    : `<textarea class="w-full bg-[#141414] p-4 rounded-xl text-sm text-gray-200 border border-gray-800 focus:border-[#FF6B6B] mt-2 custom-scrollbar auto-resize" rows="1" placeholder="메모 추가..." ${isTemp ? 'disabled' : ''}>${todo.memo}</textarea>`;
                 
                 const deleteHtml = `<div class="w-full flex justify-end mt-3 pt-3 border-t border-gray-800"><button class="delete-btn text-[11px] text-red-500 bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded transition-colors font-bold">삭제</button></div>`;
 
@@ -304,9 +340,9 @@
                     </div>
                 `;
                 
-                // 버그 픽스: 체크박스나 인풋 클릭 시 토글 방지
+                // 이벤트 버블링 차단 (인풋, 체크박스 클릭 시 토글 방지)
                 li.querySelector('.toggle-area').addEventListener('click', (e) => {
-                    if (['input', 'textarea', 'button'].includes(e.target.tagName.toLowerCase())) return;
+                    if (['input', 'textarea', 'button', 'span'].includes(e.target.tagName.toLowerCase())) return;
                     todo._isOpen = !todo._isOpen;
                     render();
                 });
@@ -316,6 +352,8 @@
                     const originalState = todo.completed;
                     todo.completed = cb.checked;
                     todo.completedAt = cb.checked ? new Date().toISOString().split('T')[0] : null;
+                    
+                    updateCache(todo);
                     if(todo.completed !== isArchiveView) todos = todos.filter(t => t.id !== todo.id);
                     render();
                     
@@ -324,7 +362,7 @@
                         postAutoLog(todo.id, `✅ **상태 변경:** ${cb.checked ? '완료됨 (Archive)' : '진행 중 (Active)'}`);
                     } 
                     catch(e) { 
-                        alert('상태 변경 실패'); 
+                        optimisticCache.delete(todo.id);
                         todo.completed = originalState;
                         if(todo.completed !== isArchiveView) todos.push(todo);
                         render();
@@ -333,35 +371,33 @@
 
                 if (!isArchiveView && !isTemp) {
                     const ta = li.querySelector('textarea');
+                    // 플렉시블 텍스트에어리어 이벤트
+                    ta.addEventListener('input', function() { autoResizeTextarea(this); });
                     ta.addEventListener('change', async () => { 
                         const oldMemo = todo.memo;
                         todo.memo = ta.value; 
+                        updateCache(todo);
                         try { 
                             await apiRequest(`/${todo.id}`, 'PATCH', { body: ta.value }); 
                             const logContent = ta.value ? `\n> ${ta.value.replace(/\n/g, '\n> ')}` : ' (내용 없음)';
-                            postAutoLog(todo.id, `📝 **메모 내용 업데이트:**${logContent}`);
+                            postAutoLog(todo.id, `📝 **메모 업데이트:**${logContent}`);
                         } 
-                        catch(e) { todo.memo = oldMemo; alert('저장 실패'); render(); }
+                        catch(e) { optimisticCache.delete(todo.id); todo.memo = oldMemo; render(); }
                     });
 
-                    // 날짜 변경 이벤트 연동 (요약 영역에 있음)
+                    // 명시적 날짜 변경 이벤트
                     const dateInput = li.querySelector('.edit-date-input');
-                    if (dateInput) {
-                        dateInput.addEventListener('change', async (e) => {
-                            const oldDate = todo.date;
-                            todo.date = e.target.value;
-                            render();
-                            try {
-                                const labels = todo.date ? [`target:${todo.date}`] : [];
-                                await apiRequest(`/${todo.id}`, 'PATCH', { labels });
-                                
-                                const logMsg = todo.date 
-                                    ? `📅 **목표일 설정/변경:** ${todo.date}` 
-                                    : `📅 **목표일 삭제됨**`;
-                                postAutoLog(todo.id, logMsg);
-                            } catch(err) { todo.date = oldDate; alert('저장 실패'); render(); }
-                        });
-                    }
+                    dateInput.addEventListener('change', async (e) => {
+                        const oldDate = todo.date;
+                        todo.date = e.target.value; // 지우면 "" 빈 문자열 됨
+                        updateCache(todo);
+                        render();
+                        try {
+                            const labels = todo.date ? [`target:${todo.date}`] : [];
+                            await apiRequest(`/${todo.id}`, 'PATCH', { labels });
+                            postAutoLog(todo.id, todo.date ? `📅 **목표일 설정:** ${todo.date}` : `📅 **목표일 삭제됨**`);
+                        } catch(err) { optimisticCache.delete(todo.id); todo.date = oldDate; render(); }
+                    });
                 }
 
                 const deleteBtn = li.querySelector('.delete-btn');
@@ -369,17 +405,23 @@
                     if(confirm(`해당 태스크를 완전히 삭제하시겠습니까?`)) {
                         const backup = {...todo};
                         todos = todos.filter(t => t.id !== todo.id);
+                        optimisticCache.delete(todo.id); // 캐시에서도 파기
                         render();
                         try { 
                             await apiRequest(`/${todo.id}`, 'PATCH', { state: 'closed', labels: ['deleted'] }); 
-                            postAutoLog(todo.id, `🗑️ **태스크 영구 삭제 처리됨 (Soft Delete)**`);
+                            postAutoLog(todo.id, `🗑️ **태스크 영구 삭제**`);
                         } 
-                        catch(e) { alert('삭제 실패'); todos.push(backup); render(); }
+                        catch(e) { todos.push(backup); render(); }
                     }
                 });
 
                 list.appendChild(li);
             });
+
+            // 렌더링 완료 후 모든 텍스트에어리어 높이 초기화 (플렉시블 적용)
+            setTimeout(() => {
+                list.querySelectorAll('textarea.auto-resize').forEach(ta => autoResizeTextarea(ta));
+            }, 0);
         }
 
         async function addTask() {
@@ -405,11 +447,11 @@
                 const idx = todos.findIndex(t => t.id === tempId);
                 if(idx > -1) {
                     todos[idx].id = res.number;
+                    updateCache(todos[idx]); // 진짜 ID 발급 후 캐시에 등록
                     render();
-                    postAutoLog(res.number, `✨ **태스크 생성됨**\n${dateVal ? `목표일: ${dateVal}` : ''}`);
+                    postAutoLog(res.number, `✨ **태스크 생성**\n${dateVal ? `목표일: ${dateVal}` : ''}`);
                 }
             } catch(e) { 
-                alert('태스크 추가에 실패했습니다. 네트워크를 확인하세요.'); 
                 todos = todos.filter(t => t.id !== tempId);
                 input.value = titleVal;
                 render();
