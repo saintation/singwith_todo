@@ -40,7 +40,7 @@
         <div class="text-[#FF6B6B] font-bold tracking-[0.2em] animate-pulse">SYNCING...</div>
     </div>
 
-    <div id="app" class="hidden w-full max-w-[550px] h-[90vh] bg-[#1A1A1A] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-800/50 relative">
+    <div id="app" class="hidden w-full max-w-[550px] md:max-w-[750px] lg:max-w-[850px] h-[90vh] bg-[#1A1A1A] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-800/50 relative transition-all duration-300">
         <div class="p-6 md:p-10 flex-1 flex flex-col overflow-hidden">
             <div class="flex justify-between items-end mb-6">
                 <h2 id="viewTitle" class="text-3xl font-bold tracking-tight text-white">Active Tasks</h2>
@@ -48,11 +48,17 @@
             </div>
 
             <div id="searchSection" class="mb-4 search-input-group hidden flex gap-2 w-full">
-                <input type="text" id="searchInput" placeholder="검색어 입력 후 Enter..." class="flex-1 min-w-0 w-full bg-[#222222] border border-gray-800 rounded-xl py-2.5 px-4 focus:border-[#FF6B6B] text-sm text-white placeholder-gray-500 shadow-sm">
-                <button onclick="reloadTasks(true)" class="bg-[#252525] border border-gray-800 text-gray-400 w-[42px] h-[42px] rounded-xl hover:bg-[#FF6B6B] hover:text-white hover:border-[#FF6B6B] flex items-center justify-center shrink-0 transition-all shadow-sm">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <div class="relative flex-1">
+                    <svg class="w-4 h-4 text-gray-500 absolute left-4 top-1/2 transform -translate-y-1/2 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                     </svg>
+                    <input type="text" id="searchInput" placeholder="검색어 입력 후 Enter..." class="w-full bg-[#222222] border border-gray-800 rounded-xl py-2.5 pl-11 pr-4 focus:border-[#FF6B6B] text-sm text-white placeholder-gray-500 shadow-sm">
+                </div>
+                <button onclick="reloadTasks(true)" class="bg-[#252525] border border-gray-800 text-gray-300 w-[42px] h-[42px] md:px-4 md:w-auto rounded-xl hover:bg-[#FF6B6B] hover:text-white hover:border-[#FF6B6B] flex items-center justify-center shrink-0 transition-all shadow-sm">
+                    <svg class="w-5 h-5 md:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                    <span class="hidden md:inline text-sm font-bold">조회</span>
                 </button>
             </div>
 
@@ -68,16 +74,17 @@
             </div>
 
             <div id="archiveFilterSection" class="mb-6 hidden">
-                <div class="flex flex-col gap-3 bg-[#222222] p-4 rounded-xl border border-gray-800">
-                    <label class="text-sm text-[#FF6B6B] font-bold">조회 기간 (완료일 기준)</label>
-                    <div class="flex items-center gap-2 w-full">
+                <div class="flex flex-col md:flex-row gap-3 bg-[#222222] p-4 rounded-xl border border-gray-800 md:items-center">
+                    <label class="text-sm text-[#FF6B6B] font-bold shrink-0">조회 기간 (완료일 기준)</label>
+                    <div class="flex items-center gap-2 w-full md:flex-1">
                         <input type="date" id="filterStart" class="flex-1 min-w-0 text-sm py-2 px-2 bg-[#1A1A1A] border border-gray-700 rounded-lg">
                         <span class="text-gray-500 font-bold shrink-0">~</span>
                         <input type="date" id="filterEnd" class="flex-1 min-w-0 text-sm py-2 px-2 bg-[#1A1A1A] border border-gray-700 rounded-lg">
-                        <button onclick="reloadTasks(true)" class="bg-gray-800 text-gray-400 w-[36px] h-[36px] rounded-lg hover:bg-gray-700 hover:text-white flex items-center justify-center shrink-0 transition-all">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <button onclick="reloadTasks(true)" class="bg-gray-800 text-gray-400 w-[36px] h-[36px] md:px-3 md:w-auto rounded-lg hover:bg-gray-700 hover:text-white flex items-center justify-center shrink-0 transition-all">
+                            <svg class="w-4 h-4 md:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                             </svg>
+                            <span class="hidden md:inline text-xs font-bold">조회</span>
                         </button>
                     </div>
                 </div>
